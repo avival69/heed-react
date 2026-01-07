@@ -1,0 +1,18 @@
+# ===== Global =====
+node_modules/
+.env
+.env.*
+
+# ===== Backend =====
+backend/node_modules/
+
+# ===== Expo / React Native =====
+frontend/node_modules/
+frontend/.expo/
+frontend/.expo-shared/
+frontend/dist/
+frontend/build/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db

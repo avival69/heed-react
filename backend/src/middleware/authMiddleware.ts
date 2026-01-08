@@ -4,7 +4,7 @@ import User, { IUser } from "../models/User.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
 
-interface AuthRequest extends Request {
+export interface AuthRequest extends Request {
   user?: IUser;
 }
 

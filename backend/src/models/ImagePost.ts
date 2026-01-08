@@ -9,6 +9,7 @@ export interface IImagePost extends Document {
   description: string;
   allowComments: boolean;
   likes: number;
+  likedBy: IUser["_id"][]; // users who liked
   createdAt: Date;
 }
 
@@ -24,6 +25,7 @@ const ImagePostSchema: Schema = new Schema({
   description: { type: String, required: true },
   allowComments: { type: Boolean, default: true },
   likes: { type: Number, default: 0 },
+  likedBy: [{ type: Schema.Types.ObjectId, ref: "User" }], // <-- track users who liked
   createdAt: { type: Date, default: Date.now },
 });
 

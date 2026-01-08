@@ -1,4 +1,6 @@
 
 to run server
 
-npx ts-node-dev src/index.ts
+npm run dev
+
+http://localhost:5000/api/auth/signup

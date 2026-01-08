@@ -8,21 +8,25 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft, Heart, MessageCircle, Share2 } from 'lucide-react-native';
 
-/* ---------- DUMMY DATA ---------- */
+/* ---------- DUMMY RELATED DATA ---------- */
 const related = Array.from({ length: 6 }).map((_, i) => ({
   id: i,
   height: i % 2 === 0 ? 160 : 220,
   color: `hsl(${i * 40}, 70%, 85%)`,
 }));
 
-export default function ItemScreen({ navigation }: any) {
+export default function ItemScreen() {
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: 140 }}
       >
         {/* ---------- IMAGE HEADER ---------- */}
         <View>
@@ -43,7 +47,7 @@ export default function ItemScreen({ navigation }: any) {
 
         {/* ---------- INFO CARD ---------- */}
         <View style={styles.card}>
-          {/* Actions */}
+          {/* ACTIONS */}
           <View style={styles.actions}>
             <Action icon={<Heart size={20} />} label="1.2K" />
             <Action icon={<MessageCircle size={20} />} label="100" />
@@ -51,19 +55,19 @@ export default function ItemScreen({ navigation }: any) {
             <Text style={styles.tuckin}>Tuck-in</Text>
           </View>
 
-          {/* Price */}
-          <Text style={styles.price}>$200.00</Text>
+          {/* PRICE */}
+          <Text style={styles.price}>₹2,000</Text>
 
-          {/* Seller */}
+          {/* SELLER */}
           <View style={styles.seller}>
             <View style={styles.avatar} />
             <Text style={styles.sellerName}>Studio SDK</Text>
           </View>
 
-          {/* Title */}
+          {/* TITLE */}
           <Text style={styles.title}>POLKA DOT HALTER MIDI</Text>
 
-          {/* Description */}
+          {/* DESCRIPTION */}
           <Text style={styles.desc}>
             A classic silhouette with a modern neckline. Designed for comfort
             and elegance.
@@ -71,7 +75,7 @@ export default function ItemScreen({ navigation }: any) {
 
           {/* CTA */}
           <TouchableOpacity style={styles.cta}>
-            <Text style={styles.ctaText}>Chat seller</Text>
+            <Text style={styles.ctaText}>Chat Seller</Text>
           </TouchableOpacity>
         </View>
 
@@ -112,7 +116,7 @@ export default function ItemScreen({ navigation }: any) {
   );
 }
 
-/* ---------- SMALL COMPONENT ---------- */
+/* ---------- SMALL ACTION COMPONENT ---------- */
 function Action({ icon, label }: any) {
   return (
     <View style={styles.actionItem}>
@@ -128,6 +132,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 420,
   },
+
   back: {
     position: 'absolute',
     top: 14,
@@ -138,84 +143,101 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 3,
+    elevation: 4,
   },
+
   card: {
-    backgroundColor: '#e5efff',
+    backgroundColor: '#eaf2ff',
     marginTop: -40,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     padding: 20,
   },
+
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
   },
+
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
+
   actionText: {
     fontWeight: '600',
   },
+
   tuckin: {
     marginLeft: 'auto',
-    fontWeight: '700',
+    fontWeight: '800',
     fontSize: 16,
   },
+
   price: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
-    marginTop: 12,
+    marginTop: 14,
   },
+
   seller: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
     gap: 8,
   },
+
   avatar: {
     width: 28,
     height: 28,
     borderRadius: 14,
     backgroundColor: '#d1d5db',
   },
+
   sellerName: {
     fontWeight: '600',
   },
+
   title: {
     fontSize: 18,
     fontWeight: '800',
     marginTop: 12,
   },
+
   desc: {
     color: '#374151',
     marginTop: 6,
     lineHeight: 20,
   },
+
   cta: {
-    height: 48,
-    backgroundColor: '#93c5fd',
-    borderRadius: 12,
+    height: 50,
+    backgroundColor: '#3b82f6',
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 16,
+    marginTop: 18,
   },
+
   ctaText: {
     fontWeight: '700',
     fontSize: 16,
+    color: '#fff',
   },
+
   section: {
     fontSize: 18,
     fontWeight: '800',
     margin: 20,
   },
+
   masonry: {
     flexDirection: 'row',
     paddingHorizontal: 12,
   },
+
   relatedCard: {
     borderRadius: 16,
     marginBottom: 12,

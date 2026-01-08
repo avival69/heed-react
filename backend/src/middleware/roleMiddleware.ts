@@ -6,6 +6,6 @@ interface AuthRequest extends Request {
 }
 
 export const requireBusiness = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (req.user?.userType !== "standard") return res.status(403).json({ message: "Access denied" });
+  if (req.user?.userType !== "business") return res.status(403).json({ message: "Access denied" });
   next();
 };

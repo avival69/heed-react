@@ -1,14 +1,15 @@
 import mongoose, { Schema, Document, model } from "mongoose";
 
 export interface IUser extends Document {
-  userType: "general" | "standard";
+  //Common mandatory fields
+  userType: "general" | "business";
   username: string;
   name: string;
   email: string;
   password: string;
   phone: string;
 
-  // Common fields
+  // Common optional fields
   age?: number;
   bio?: string;
   gender?: "male" | "female" | "other";
@@ -26,7 +27,7 @@ const userSchema = new Schema<IUser>(
   {
     userType: {
       type: String,
-      enum: ["general", "standard"],
+      enum: ["general", "business"],
       required: true,
     },
     username: {
@@ -47,8 +48,8 @@ const userSchema = new Schema<IUser>(
       required: true,
       unique: true,
       lowercase: true,
-      trim: true,
-      index: true,
+      trim: true,//removes leading and trailing spaces
+      index: true,//creates an index for faster search
     },
     password: {
       type: String,
@@ -58,7 +59,7 @@ const userSchema = new Schema<IUser>(
       type: String,
       required: true,
     },
-    // Common fields
+    // Common optional fields
     age: Number,
     bio: { type: String, trim: true },
     gender: { type: String, enum: ["male", "female", "other"] },
@@ -68,8 +69,8 @@ const userSchema = new Schema<IUser>(
       type: String,
       trim: true,
       required: function (this: IUser) {
-        return this.userType === "standard";
-      },
+        return this.userType === "business";
+      },//required if userType is business
     },
     address: { type: String, trim: true },
     PAN: { type: String, trim: true },
@@ -79,10 +80,11 @@ const userSchema = new Schema<IUser>(
   { timestamps: true }
 );
 
-// Business validation: at least one of PAN/Aadhar/GST for standard users
-userSchema.pre("save", function (next) {
+// Business validation: at least one of PAN/Aadhar/GST for business users
+userSchema.pre("save", function (next) { //this is a pre-save hook, runs before 
+// saving a document to MongoDB
   if (
-    this.userType === "standard" &&
+    this.userType === "business" &&
     !this.PAN &&
     !this.Aadhar &&
     !this.GST
@@ -98,12 +100,12 @@ userSchema.pre("save", function (next) {
 
 // Case-insensitive unique indexes
 userSchema.index(
-  { email: 1 },
+  { email: 1 },//index created in ascending order, descending order also same for unique
   { unique: true, collation: { locale: "en", strength: 2 } }
 );
 userSchema.index(
   { username: 1 },
-  { unique: true, collation: { locale: "en", strength: 2 } }
+  { unique: true, collation: { locale: "en", strength: 2 } }//strength 2 for case insensitivity
 );
 
 export default model<IUser>("User", userSchema);

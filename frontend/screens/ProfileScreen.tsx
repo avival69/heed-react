@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,10 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  Modal,
+  Pressable,
+  Animated,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -18,12 +22,26 @@ const posts = Array.from({ length: 12 }).map((_, i) => ({
 
 export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState('Posts');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+
+  const slideAnim = useRef(new Animated.Value(260)).current;
 
   const left = posts.filter((_, i) => i % 2 === 0);
   const right = posts.filter((_, i) => i % 2 !== 0);
 
+  useEffect(() => {
+    Animated.timing(slideAnim, {
+      toValue: menuOpen ? 0 : 260,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  }, [menuOpen]);
+
+  const theme = darkMode ? dark : light;
+
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <SafeAreaView style={[{ flex: 1 }, theme.bg]} edges={['top']}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
@@ -37,24 +55,31 @@ export default function ProfileScreen() {
             style={styles.cover}
           />
 
+          <TouchableOpacity
+            style={styles.menuBtn}
+            onPress={() => setMenuOpen(true)}
+          >
+            <Text style={styles.menuIcon}>☰</Text>
+          </TouchableOpacity>
+
           <View style={styles.avatarWrap}>
-            <View style={styles.avatar} />
+            <View style={[styles.avatar, theme.avatar]} />
           </View>
         </View>
 
         {/* ---------- USER INFO ---------- */}
         <View style={styles.info}>
-          <Text style={styles.username}>@aswin</Text>
-          <Text style={styles.bio}>
+          <Text style={[styles.username, theme.text]}>@aswin</Text>
+          <Text style={[styles.bio, theme.subText]}>
             Building Heed ✨ | Tech • Design • Startups
           </Text>
         </View>
 
         {/* ---------- STATS ---------- */}
         <View style={styles.stats}>
-          <Stat label="Posts" value="35" />
-          <Stat label="Followers" value="1500" />
-          <Stat label="Following" value="250" />
+          <Stat label="Posts" value="35" theme={theme} />
+          <Stat label="Followers" value="1500" theme={theme} />
+          <Stat label="Following" value="250" theme={theme} />
         </View>
 
         {/* ---------- ACTION BUTTONS ---------- */}
@@ -64,7 +89,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* ---------- TABS ---------- */}
-        <View style={styles.tabs}>
+        <View style={[styles.tabs, theme.border]}>
           {['Posts', 'Tuck-in', 'Saved', 'Group1'].map((tab) => (
             <TouchableOpacity
               key={tab}
@@ -74,7 +99,8 @@ export default function ProfileScreen() {
               <Text
                 style={[
                   styles.tabText,
-                  activeTab === tab && styles.tabActive,
+                  theme.subText,
+                  activeTab === tab && theme.text,
                 ]}
               >
                 {tab}
@@ -84,7 +110,7 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        {/* ---------- MASONRY GRID ---------- */}
+        {/* ---------- MASONRY ---------- */}
         {activeTab === 'Posts' && (
           <View style={styles.masonry}>
             <View style={{ flex: 1, marginRight: 6 }}>
@@ -98,7 +124,6 @@ export default function ProfileScreen() {
                 />
               ))}
             </View>
-
             <View style={{ flex: 1, marginLeft: 6 }}>
               {right.map((item) => (
                 <View
@@ -113,22 +138,52 @@ export default function ProfileScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* ---------- SIDEBAR ---------- */}
+      <Modal transparent visible={menuOpen}>
+        <Pressable style={styles.overlay} onPress={() => setMenuOpen(false)} />
+
+        <Animated.View
+          style={[
+            styles.sidebar,
+            theme.sidebar,
+            { transform: [{ translateX: slideAnim }] },
+          ]}
+        >
+          <Text style={[styles.sidebarTitle, theme.text]}>Settings</Text>
+
+          <SidebarItem label="Accounts" />
+          <SidebarItem label="Terms & Conditions" />
+
+          {/* DARK MODE */}
+          <View style={styles.darkRow}>
+            <Text style={[styles.sidebarText, theme.text]}>
+              Dark Mode
+            </Text>
+            <Switch value={darkMode} onValueChange={setDarkMode} />
+          </View>
+
+          <View style={styles.divider} />
+
+          <SidebarItem label="Log out" danger />
+        </Animated.View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 /* ---------- SMALL COMPONENTS ---------- */
 
-function Stat({ label, value }: any) {
+function Stat({ label, value, theme }) {
   return (
     <View style={{ alignItems: 'center' }}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, theme.text]}>{value}</Text>
+      <Text style={[styles.statLabel, theme.subText]}>{label}</Text>
     </View>
   );
 }
 
-function ActionButton({ title }: any) {
+function ActionButton({ title }) {
   return (
     <TouchableOpacity style={styles.actionBtn}>
       <Text style={styles.actionText}>{title}</Text>
@@ -136,50 +191,77 @@ function ActionButton({ title }: any) {
   );
 }
 
+function SidebarItem({ label, danger }) {
+  return (
+    <TouchableOpacity style={styles.sidebarItem}>
+      <Text
+        style={[
+          styles.sidebarText,
+          danger && { color: '#dc2626' },
+        ]}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+/* ---------- THEMES ---------- */
+
+const light = {
+  bg: { backgroundColor: '#fff' },
+  text: { color: '#111827' },
+  subText: { color: '#6b7280' },
+  border: { borderColor: '#e5e7eb' },
+  sidebar: { backgroundColor: '#fff' },
+  avatar: { backgroundColor: '#e5e7eb' },
+};
+
+const dark = {
+  bg: { backgroundColor: '#0f172a' },
+  text: { color: '#f8fafc' },
+  subText: { color: '#94a3b8' },
+  border: { borderColor: '#1e293b' },
+  sidebar: { backgroundColor: '#020617' },
+  avatar: { backgroundColor: '#1e293b' },
+};
+
 /* ---------- STYLES ---------- */
+
 const styles = StyleSheet.create({
-  cover: {
-    width: '100%',
-    height: 160,
+  cover: { width: '100%', height: 160 },
+
+  menuBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 10,
+    borderRadius: 12,
   },
-  avatarWrap: {
-    alignItems: 'center',
-    marginTop: -50,
-  },
+  menuIcon: { color: '#fff', fontSize: 18, fontWeight: '700' },
+
+  avatarWrap: { alignItems: 'center', marginTop: -50 },
   avatar: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#e5e7eb',
     borderWidth: 4,
     borderColor: '#fff',
   },
-  info: {
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  username: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  bio: {
-    color: '#6b7280',
-    marginTop: 4,
-    textAlign: 'center',
-  },
+
+  info: { alignItems: 'center', marginTop: 8 },
+  username: { fontSize: 18, fontWeight: '700' },
+  bio: { marginTop: 4, textAlign: 'center' },
+
   stats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginTop: 20,
   },
-  statValue: {
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  statLabel: {
-    color: '#6b7280',
-    fontSize: 12,
-  },
+  statValue: { fontWeight: '700', fontSize: 16 },
+  statLabel: { fontSize: 12 },
+
   actions: {
     flexDirection: 'row',
     gap: 12,
@@ -189,47 +271,64 @@ const styles = StyleSheet.create({
   actionBtn: {
     flex: 1,
     height: 40,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: '#e5efff',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionText: {
-    color: '#2563eb',
-    fontWeight: '600',
-  },
+  actionText: { color: '#2563eb', fontWeight: '600' },
+
   tabs: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginTop: 24,
     borderBottomWidth: 1,
-    borderColor: '#e5e7eb',
   },
-  tabBtn: {
-    alignItems: 'center',
-    paddingBottom: 10,
-  },
-  tabText: {
-    color: '#6b7280',
-    fontWeight: '600',
-  },
-  tabActive: {
-    color: '#111827',
-  },
+  tabBtn: { alignItems: 'center', paddingBottom: 10 },
+  tabText: { fontWeight: '600' },
   tabUnderline: {
     height: 2,
     width: 24,
-    backgroundColor: '#111827',
+    backgroundColor: '#6366f1',
     marginTop: 6,
     borderRadius: 2,
   },
-  masonry: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    marginTop: 16,
+
+  masonry: { flexDirection: 'row', paddingHorizontal: 12, marginTop: 16 },
+  card: { borderRadius: 16, marginBottom: 12 },
+
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
+
+  sidebar: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 260,
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    borderTopLeftRadius: 24,
+    borderBottomLeftRadius: 24,
   },
-  card: {
-    borderRadius: 16,
-    marginBottom: 12,
+
+  sidebarTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 24,
+  },
+  sidebarItem: { paddingVertical: 14 },
+  sidebarText: { fontSize: 16, fontWeight: '500' },
+
+  divider: {
+    height: 1,
+    backgroundColor: '#1e293b',
+    marginVertical: 16,
+  },
+
+  darkRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
   },
 });

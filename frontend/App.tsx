@@ -4,6 +4,7 @@ import {
   Animated,
   StyleSheet,
   ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import {
@@ -12,6 +13,7 @@ import {
 } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
 import {
   Home,
   Search,
@@ -19,28 +21,28 @@ import {
   MessageCircle,
   User,
 } from 'lucide-react-native';
+
 import {
   useFonts,
   DancingScript_700Bold,
 } from '@expo-google-fonts/dancing-script';
 
-/* ---------- MAIN SCREENS ---------- */
+/* ---------- SCREENS ---------- */
 import HomeScreen from './screens/HomeScreen';
 import SearchScreen from './screens/SearchScreen';
 import CreateScreen from './screens/CreateScreen';
 import ChatScreen from './screens/ChatScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import ItemScreen from './screens/ItemScreen';
 
-/* ---------- AUTH SCREENS ---------- */
+/* ---------- AUTH ---------- */
 import SignInScreen from './screens/auth/SignInScreen';
 import SignUpScreen from './screens/auth/SignUpScreen';
-
-import './global.css';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-/* ---------- FAST FLOATING TAB BAR ---------- */
+/* ---------- FLOATING TAB BAR ---------- */
 function FloatingTabBar(
   props: BottomTabBarProps & { scrollY: Animated.Value }
 ) {
@@ -71,12 +73,16 @@ function FloatingTabBar(
         const color = isFocused ? '#3b82f6' : '#9ca3af';
 
         return (
-          <View
+          <Pressable
             key={route.key}
             style={styles.tabItem}
-            onTouchEnd={() =>
-              !isFocused && navigation.navigate(route.name)
-            }
+            accessibilityRole="button"
+            accessibilityState={isFocused ? { selected: true } : {}}
+            onPress={() => {
+              if (!isFocused) {
+                navigation.navigate(route.name);
+              }
+            }}
           >
             {route.name === 'Home' && <Home size={24} color={color} />}
             {route.name === 'Search' && <Search size={24} color={color} />}
@@ -91,7 +97,7 @@ function FloatingTabBar(
               <MessageCircle size={24} color={color} />
             )}
             {route.name === 'Profile' && <User size={24} color={color} />}
-          </View>
+          </Pressable>
         );
       })}
     </Animated.View>
@@ -120,13 +126,24 @@ function MainTabs() {
   );
 }
 
-/* ---------- APP ROOT ---------- */
+/* ---------- AUTH STACK ---------- */
+function AuthStack({ onLogin }: { onLogin: () => void }) {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="SignIn">
+        {(props) => <SignInScreen {...props} onLogin={onLogin} />}
+      </Stack.Screen>
+      <Stack.Screen name="SignUp" component={SignUpScreen} />
+    </Stack.Navigator>
+  );
+}
+
+/* ---------- ROOT APP ---------- */
 export default function App() {
   const [fontsLoaded] = useFonts({
     DancingScript_700Bold,
   });
 
-  // 🔐 TEMP AUTH STATE (replace with Firebase later)
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   if (!fontsLoaded) {
@@ -140,21 +157,18 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <NavigationContainer>
-        {isLoggedIn ? (
-          <MainTabs />
-        ) : (
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="SignIn">
-              {(props) => (
-                <SignInScreen
-                  {...props}
-                  onLogin={() => setIsLoggedIn(true)}
-                />
-              )}
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {!isLoggedIn ? (
+            <Stack.Screen name="Auth">
+              {() => <AuthStack onLogin={() => setIsLoggedIn(true)} />}
             </Stack.Screen>
-            <Stack.Screen name="SignUp" component={SignUpScreen} />
-          </Stack.Navigator>
-        )}
+          ) : (
+            <>
+              <Stack.Screen name="Main" component={MainTabs} />
+              <Stack.Screen name="Item" component={ItemScreen} />
+            </>
+          )}
+        </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
   );

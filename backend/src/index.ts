@@ -18,5 +18,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/images", imagePostRoutes);
 
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const PORT: number = parseInt(process.env.PORT || '5000', 10);
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+});
+

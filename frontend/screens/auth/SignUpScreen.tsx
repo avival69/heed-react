@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useContext } from 'react';
 import {
   View,
   Text,
@@ -10,16 +10,18 @@ import {
   Dimensions,
 } from 'react-native';
 import { signupApi } from 'src/api/auth';
+import { AuthContext } from 'src/context/AuthContext';
 
 const { width } = Dimensions.get('window');
 const MAX_WIDTH = 420;
-
 const interestsList = ['Design', 'Tech', 'Doctor', 'Legal', 'Fitness'];
 
 export default function SignUpScreen({ navigation }: any) {
+  const { login } = useContext(AuthContext);
+
   const [step, setStep] = useState(0);
-  const [userType, setUserType] =
-    useState<'general' | 'standard' | null>(null);
+  const [userType, setUserType] = useState<'general' | 'standard' | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(30)).current;
@@ -41,15 +43,12 @@ export default function SignUpScreen({ navigation }: any) {
     GST: '',
   });
 
-  const update = (k: string, v: any) =>
-    setForm((p) => ({ ...p, [k]: v }));
-
+  const update = (k: string, v: any) => setForm((p) => ({ ...p, [k]: v }));
   const next = () => setStep((s) => s + 1);
 
   useEffect(() => {
     fade.setValue(0);
     slide.setValue(30);
-
     Animated.parallel([
       Animated.timing(fade, {
         toValue: 1,
@@ -63,37 +62,60 @@ export default function SignUpScreen({ navigation }: any) {
       }),
     ]).start();
   }, [step]);
+const submit = async () => {
+  try {
+    setLoading(true);
 
-  const submit = async () => {
-    try {
-      const payload = {
-        userType: userType === 'standard' ? 'business' : 'general',
-        username: form.username,
-        name: form.name,
-        email: form.email,
-        password: form.password,
-        phone: form.phone,
-        companyName: form.companyName,
-        address: form.address,
-        PAN: form.PAN,
-        Aadhar: form.Aadhar,
-        GST: form.GST,
-      };
+    const payload = {
+      userType: userType === 'standard' ? 'business' : 'general',
+      username: form.username,
+      name: form.name,
+      email: form.email,
+      password: form.password,
+      phone: form.phone,
+      age: form.age,
+      gender: form.gender,
+      bio: form.bio,
+      interests: form.interests,
+      companyName: form.companyName,
+      address: form.address,
+      PAN: form.PAN,
+      Aadhar: form.Aadhar,
+      GST: form.GST,
+    };
 
-      await signupApi(payload);
-      navigation.replace('SignIn');
-    } catch (err: any) {
-      alert(err.message || 'Signup failed');
-    }
-  };
+    const res = await signupApi(payload);
+
+    // Automatically log in user after signup
+    await login(res.user, res.token);
+    // AppContent will automatically forward to main/home
+  }catch (err: any) {
+  console.log("SIGNUP ERROR FULL:", err);
+
+  if (err.response) {
+    // Backend responded
+    console.log("STATUS:", err.response.status);
+    console.log("DATA:", err.response.data);
+    alert(err.response.data.message);
+  } else if (err.request) {
+    // Network error
+    console.log("NO RESPONSE:", err.request);
+    alert("Network error: Cannot reach server");
+  } else {
+    // JS error
+    console.log("MESSAGE:", err.message);
+    alert(err.message);
+  }
+}
+finally {
+    setLoading(false);
+  }
+};
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <Animated.View
-        style={[
-          styles.card,
-          { opacity: fade, transform: [{ translateY: slide }] },
-        ]}
+        style={[styles.card, { opacity: fade, transform: [{ translateY: slide }] }]}
       >
         {/* STEP 0 */}
         {step === 0 && (
@@ -103,10 +125,7 @@ export default function SignUpScreen({ navigation }: any) {
 
             <TouchableOpacity
               style={styles.option}
-              onPress={() => {
-                setUserType('general');
-                next();
-              }}
+              onPress={() => { setUserType('general'); next(); }}
             >
               <Text style={styles.optionTitle}>General Account</Text>
               <Text style={styles.optionDesc}>Individuals & creators</Text>
@@ -114,10 +133,7 @@ export default function SignUpScreen({ navigation }: any) {
 
             <TouchableOpacity
               style={styles.option}
-              onPress={() => {
-                setUserType('standard');
-                next();
-              }}
+              onPress={() => { setUserType('standard'); next(); }}
             >
               <Text style={styles.optionTitle}>Business Account</Text>
               <Text style={styles.optionDesc}>Companies & brands</Text>
@@ -177,7 +193,6 @@ export default function SignUpScreen({ navigation }: any) {
         {step === 3 && userType === 'general' && (
           <>
             <Text style={styles.title}>About you</Text>
-
             <TextInput
               placeholder="Age"
               keyboardType="numeric"
@@ -199,7 +214,36 @@ export default function SignUpScreen({ navigation }: any) {
               onChangeText={(v) => update('bio', v)}
             />
 
-            <PrimaryButton label="Create account" onPress={submit} />
+            <Text style={[styles.title, { fontSize: 20, marginTop: 20 }]}>
+              Select your interests
+            </Text>
+            <View style={styles.interestsContainer}>
+              {interestsList.map((interest) => {
+                const selected = form.interests.includes(interest);
+                return (
+                  <TouchableOpacity
+                    key={interest}
+                    style={[styles.interestBtn, selected && styles.interestBtnSelected]}
+                    onPress={() => {
+                      if (selected) {
+                        update('interests', form.interests.filter((i) => i !== interest));
+                      } else {
+                        update('interests', [...form.interests, interest]);
+                      }
+                    }}
+                  >
+                    <Text style={[styles.interestText, selected && { color: '#fff', fontWeight: '700' }]}>
+                      {interest}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <PrimaryButton
+              label={loading ? 'Creating account...' : 'Create account'}
+              onPress={submit}
+            />
           </>
         )}
 
@@ -207,39 +251,43 @@ export default function SignUpScreen({ navigation }: any) {
         {step === 3 && userType === 'standard' && (
           <>
             <Text style={styles.title}>Business details</Text>
+            <TextInput placeholder="Company name" style={styles.input} value={form.companyName} onChangeText={(v) => update('companyName', v)} />
+            <TextInput placeholder="Address" style={styles.input} value={form.address} onChangeText={(v) => update('address', v)} />
+            <TextInput placeholder="PAN" style={styles.input} value={form.PAN} onChangeText={(v) => update('PAN', v)} />
+            <TextInput placeholder="Aadhar" style={styles.input} value={form.Aadhar} onChangeText={(v) => update('Aadhar', v)} />
+            <TextInput placeholder="GST" style={styles.input} value={form.GST} onChangeText={(v) => update('GST', v)} />
+            <TextInput placeholder="Bio" multiline style={[styles.input, styles.textArea]} value={form.bio} onChangeText={(v) => update('bio', v)} />
 
-            <TextInput
-              placeholder="Company name"
-              style={styles.input}
-              value={form.companyName}
-              onChangeText={(v) => update('companyName', v)}
-            />
-            <TextInput
-              placeholder="Address"
-              style={styles.input}
-              value={form.address}
-              onChangeText={(v) => update('address', v)}
-            />
-            <TextInput
-              placeholder="PAN"
-              style={styles.input}
-              value={form.PAN}
-              onChangeText={(v) => update('PAN', v)}
-            />
-            <TextInput
-              placeholder="Aadhar"
-              style={styles.input}
-              value={form.Aadhar}
-              onChangeText={(v) => update('Aadhar', v)}
-            />
-            <TextInput
-              placeholder="GST"
-              style={styles.input}
-              value={form.GST}
-              onChangeText={(v) => update('GST', v)}
-            />
+            <Text style={[styles.title, { fontSize: 20, marginTop: 20 }]}>
+              Select your interests
+            </Text>
+            <View style={styles.interestsContainer}>
+              {interestsList.map((interest) => {
+                const selected = form.interests.includes(interest);
+                return (
+                  <TouchableOpacity
+                    key={interest}
+                    style={[styles.interestBtn, selected && styles.interestBtnSelected]}
+                    onPress={() => {
+                      if (selected) {
+                        update('interests', form.interests.filter((i) => i !== interest));
+                      } else {
+                        update('interests', [...form.interests, interest]);
+                      }
+                    }}
+                  >
+                    <Text style={[styles.interestText, selected && { color: '#fff', fontWeight: '700' }]}>
+                      {interest}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
-            <PrimaryButton label="Submit for review" onPress={submit} />
+            <PrimaryButton
+              label={loading ? 'Submitting...' : 'Submit for review'}
+              onPress={submit}
+            />
           </>
         )}
       </Animated.View>
@@ -256,65 +304,19 @@ function PrimaryButton({ label, onPress }: any) {
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-    padding: 24,
-  },
-  card: {
-    width: '100%',
-    maxWidth: MAX_WIDTH,
-    alignSelf: 'center',
-  },
-  logo: {
-    fontSize: 42,
-    textAlign: 'center',
-    marginBottom: 12,
-    fontFamily: 'DancingScript_700Bold',
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '800',
-    marginBottom: 24,
-  },
-  input: {
-    height: 48,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    paddingHorizontal: 16,
-    marginBottom: 14,
-  },
-  textArea: {
-    height: 90,
-    paddingTop: 12,
-  },
-  btn: {
-    height: 50,
-    backgroundColor: '#3b82f6',
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  btnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  option: {
-    backgroundColor: '#f9fafb',
-    padding: 20,
-    borderRadius: 18,
-    marginBottom: 16,
-  },
-  optionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  optionDesc: {
-    color: '#6b7280',
-    marginTop: 4,
-  },
+  page: { flexGrow: 1, justifyContent: 'center', backgroundColor: '#fff', padding: 24 },
+  card: { width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center' },
+  logo: { fontSize: 42, textAlign: 'center', marginBottom: 12, fontFamily: 'DancingScript_700Bold' },
+  title: { fontSize: 26, fontWeight: '800', marginBottom: 24 },
+  input: { height: 48, borderRadius: 14, borderWidth: 1, borderColor: '#e5e7eb', paddingHorizontal: 16, marginBottom: 14 },
+  textArea: { height: 90, paddingTop: 12 },
+  btn: { height: 50, backgroundColor: '#3b82f6', borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginTop: 10 },
+  btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  option: { backgroundColor: '#f9fafb', padding: 20, borderRadius: 18, marginBottom: 16 },
+  optionTitle: { fontSize: 18, fontWeight: '700' },
+  optionDesc: { color: '#6b7280', marginTop: 4 },
+  interestsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
+  interestBtn: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16, marginRight: 8, marginBottom: 8 },
+  interestBtnSelected: { backgroundColor: '#3b82f6', borderColor: '#3b82f6' },
+  interestText: { color: '#6b7280' },
 });

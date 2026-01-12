@@ -1,11 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useContext, useEffect } from 'react';
 import {
   View,
   Animated,
   StyleSheet,
-  ActivityIndicator,
   Pressable,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import {
@@ -18,19 +18,10 @@ import * as ImagePicker from 'expo-image-picker';
 import * as SplashScreen from 'expo-splash-screen';
 
 /* ---------- ICONS ---------- */
-import {
-  Home,
-  Search,
-  PlusSquare,
-  MessageCircle,
-  User,
-} from 'lucide-react-native';
+import { Home, Search, PlusSquare, MessageCircle, User } from 'lucide-react-native';
 
 /* ---------- FONTS ---------- */
-import {
-  useFonts,
-  DancingScript_700Bold,
-} from '@expo-google-fonts/dancing-script';
+import { useFonts, DancingScript_700Bold } from '@expo-google-fonts/dancing-script';
 
 /* ---------- SPLASH ---------- */
 import AnimatedSplash from './screens/components/AnimatedSplash';
@@ -47,6 +38,7 @@ import EditImageScreen from './screens/components/EditImageScreen';
 /* ---------- AUTH ---------- */
 import SignInScreen from './screens/auth/SignInScreen';
 import SignUpScreen from './screens/auth/SignUpScreen';
+import { AuthProvider, AuthContext } from 'src/context/AuthContext';
 
 // Keep native splash visible until we are ready
 SplashScreen.preventAutoHideAsync();
@@ -74,9 +66,7 @@ export async function openGallery(max = 4): Promise<string[] | null> {
 }
 
 /* ---------- FLOATING TAB BAR ---------- */
-function FloatingTabBar(
-  props: BottomTabBarProps & { scrollY: Animated.Value }
-) {
+function FloatingTabBar(props: BottomTabBarProps & { scrollY: Animated.Value }) {
   const { state, navigation, scrollY } = props;
   const translateY = useRef(new Animated.Value(0)).current;
 
@@ -136,9 +126,7 @@ function FloatingTabBar(
                 fill={isFocused ? '#3b82f6' : 'transparent'}
               />
             )}
-            {route.name === 'Chat' && (
-              <MessageCircle size={24} color={color} />
-            )}
+            {route.name === 'Chat' && <MessageCircle size={24} color={color} />}
             {route.name === 'Profile' && <User size={24} color={color} />}
           </Pressable>
         );
@@ -156,9 +144,7 @@ function MainTabs() {
       screenOptions={{ headerShown: false }}
       tabBar={(props) => <FloatingTabBar {...props} scrollY={scrollY} />}
     >
-      <Tab.Screen name="Home">
-        {() => <HomeScreen scrollY={scrollY} />}
-      </Tab.Screen>
+      <Tab.Screen name="Home">{() => <HomeScreen scrollY={scrollY} />}</Tab.Screen>
       <Tab.Screen name="Search" component={SearchScreen} />
       <Tab.Screen name="Create" component={CreateScreen} />
       <Tab.Screen name="Chat" component={ChatScreen} />
@@ -168,7 +154,8 @@ function MainTabs() {
 }
 
 /* ---------- AUTH STACK ---------- */
-function AuthStack() {
+interface AuthStackProps {}
+function AuthStack({}: AuthStackProps) {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="SignIn" component={SignInScreen} />
@@ -177,38 +164,28 @@ function AuthStack() {
   );
 }
 
-/* ---------- ROOT ---------- */
-export default function App() {
-  const [fontsLoaded] = useFonts({
-    DancingScript_700Bold,
-    HeedBrush: require('./assets/fonts/HeedBrush.otf'),
-  });
-
+/* ---------- ROOT APP ---------- */
+function AppContent() {
+  const { user, loading } = useContext(AuthContext);
   const [showSplash, setShowSplash] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  
+  if (loading || !showSplash) {
+    // Wait until AsyncStorage check and splash finishes
+  }
 
-  if (!fontsLoaded) return null;
+  if (!showSplash) {
+    SplashScreen.hideAsync();
+  }
 
   return (
-    <SafeAreaProvider>
-      <View style={{ flex: 1 }}>
-        {showSplash && (
-          <AnimatedSplash
-            onFinish={() => {
-              setShowSplash(false);
-            }}
-          />
-        )}
+    <View style={{ flex: 1 }}>
+      {showSplash && <AnimatedSplash onFinish={() => setShowSplash(false)} />}
 
-        {/* Navigation is rendered but hidden behind splash 
-          until showSplash becomes false
-        */}
+      {!loading && (
         <NavigationContainer>
           <Stack.Navigator screenOptions={{ headerShown: false }}>
-            {!isLoggedIn ? (
-              <Stack.Screen name="Auth">
-                {() => <AuthStack onLogin={() => setIsLoggedIn(true)} />}
-              </Stack.Screen>
+            {!user ? (
+              <Stack.Screen name="Auth" component={AuthStack} />
             ) : (
               <>
                 <Stack.Screen name="Main" component={MainTabs} />
@@ -218,8 +195,25 @@ export default function App() {
             )}
           </Stack.Navigator>
         </NavigationContainer>
-      </View>
-    </SafeAreaProvider>
+      )}
+    </View>
+  );
+}
+
+export default function App() {
+  const [fontsLoaded] = useFonts({
+    DancingScript_700Bold,
+    HeedBrush: require('./assets/fonts/HeedBrush.otf'),
+  });
+
+  if (!fontsLoaded) return null;
+
+  return (
+    <AuthProvider>
+      <SafeAreaProvider>
+        <AppContent />
+      </SafeAreaProvider>
+    </AuthProvider>
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
   Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AuthContext } from 'src/context/AuthContext'; // adjust path
+import { useFocusEffect } from '@react-navigation/native';
 
 /* --------- DUMMY POSTS --------- */
 const posts = Array.from({ length: 12 }).map((_, i) => ({
@@ -20,7 +22,9 @@ const posts = Array.from({ length: 12 }).map((_, i) => ({
   color: `hsl(${i * 35}, 70%, 85%)`,
 }));
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }: any) {
+  const { user, logout } = useContext(AuthContext);
+
   const [activeTab, setActiveTab] = useState('Posts');
   const [menuOpen, setMenuOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
@@ -29,6 +33,15 @@ export default function ProfileScreen() {
 
   const left = posts.filter((_, i) => i % 2 === 0);
   const right = posts.filter((_, i) => i % 2 !== 0);
+
+  // ----------------- AUTO REDIRECT IF NOT LOGGED IN -----------------
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!user) {
+        navigation.replace('SignIn');
+      }
+    }, [user])
+  );
 
   useEffect(() => {
     Animated.timing(slideAnim, {
@@ -69,9 +82,11 @@ export default function ProfileScreen() {
 
         {/* ---------- USER INFO ---------- */}
         <View style={styles.info}>
-          <Text style={[styles.username, theme.text]}>@aswin</Text>
+          <Text style={[styles.username, theme.text]}>
+            {user?.username || '@aswin'}
+          </Text>
           <Text style={[styles.bio, theme.subText]}>
-            Building Heed ✨ | Tech • Design • Startups
+            {user?.bio || 'Building Heed ✨ | Tech • Design • Startups'}
           </Text>
         </View>
 
@@ -157,15 +172,22 @@ export default function ProfileScreen() {
 
           {/* DARK MODE */}
           <View style={styles.darkRow}>
-            <Text style={[styles.sidebarText, theme.text]}>
-              Dark Mode
-            </Text>
+            <Text style={[styles.sidebarText, theme.text]}>Dark Mode</Text>
             <Switch value={darkMode} onValueChange={setDarkMode} />
           </View>
 
           <View style={styles.divider} />
 
-          <SidebarItem label="Log out" danger />
+          {/* LOGOUT BUTTON */}
+          <SidebarItem
+            label="Log out"
+            danger
+            onPress={async () => {
+              setMenuOpen(false);
+              await logout();
+              navigation.replace('SignIn');
+            }}
+          />
         </Animated.View>
       </Modal>
     </SafeAreaView>
@@ -191,15 +213,10 @@ function ActionButton({ title }) {
   );
 }
 
-function SidebarItem({ label, danger }) {
+function SidebarItem({ label, danger, onPress }: any) {
   return (
-    <TouchableOpacity style={styles.sidebarItem}>
-      <Text
-        style={[
-          styles.sidebarText,
-          danger && { color: '#dc2626' },
-        ]}
-      >
+    <TouchableOpacity style={styles.sidebarItem} onPress={onPress}>
+      <Text style={[styles.sidebarText, danger && { color: '#dc2626' }]}>
         {label}
       </Text>
     </TouchableOpacity>

@@ -9,6 +9,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
+import { signupApi } from 'src/api/auth';
 
 const { width } = Dimensions.get('window');
 const MAX_WIDTH = 420;
@@ -63,27 +64,27 @@ export default function SignUpScreen({ navigation }: any) {
     ]).start();
   }, [step]);
 
-  const submit = () => {
-    const payload = {
-      userType,
-      username: form.username,
-      name: form.name,
-      email: form.email,
-      password: form.password,
-      phone: form.phone,
-      age: form.age ? Number(form.age) : undefined,
-      gender: form.gender || undefined,
-      bio: form.bio || undefined,
-      interests: form.interests,
-      companyName: userType === 'standard' ? form.companyName : undefined,
-      address: userType === 'standard' ? form.address : undefined,
-      PAN: form.PAN || undefined,
-      Aadhar: form.Aadhar || undefined,
-      GST: form.GST || undefined,
-    };
+  const submit = async () => {
+    try {
+      const payload = {
+        userType: userType === 'standard' ? 'business' : 'general',
+        username: form.username,
+        name: form.name,
+        email: form.email,
+        password: form.password,
+        phone: form.phone,
+        companyName: form.companyName,
+        address: form.address,
+        PAN: form.PAN,
+        Aadhar: form.Aadhar,
+        GST: form.GST,
+      };
 
-    console.log('SIGNUP PAYLOAD', payload);
-    navigation.replace('SignIn');
+      await signupApi(payload);
+      navigation.replace('SignIn');
+    } catch (err: any) {
+      alert(err.message || 'Signup failed');
+    }
   };
 
   return (
@@ -160,6 +161,7 @@ export default function SignUpScreen({ navigation }: any) {
               style={styles.input}
               value={form.email}
               onChangeText={(v) => update('email', v)}
+              autoCapitalize="none"
             />
             <TextInput
               placeholder="Phone"
@@ -184,7 +186,7 @@ export default function SignUpScreen({ navigation }: any) {
               onChangeText={(v) => update('age', v)}
             />
             <TextInput
-              placeholder="Gender (male / female / other)"
+              placeholder="Gender"
               style={styles.input}
               value={form.gender}
               onChangeText={(v) => update('gender', v)}
@@ -196,29 +198,6 @@ export default function SignUpScreen({ navigation }: any) {
               value={form.bio}
               onChangeText={(v) => update('bio', v)}
             />
-
-            <Text style={styles.sub}>Interests</Text>
-            <View style={styles.chips}>
-              {interestsList.map((i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={[
-                    styles.chip,
-                    form.interests.includes(i) && styles.chipActive,
-                  ]}
-                  onPress={() =>
-                    update(
-                      'interests',
-                      form.interests.includes(i)
-                        ? form.interests.filter((x) => x !== i)
-                        : [...form.interests, i]
-                    )
-                  }
-                >
-                  <Text>{i}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
 
             <PrimaryButton label="Create account" onPress={submit} />
           </>
@@ -240,13 +219,6 @@ export default function SignUpScreen({ navigation }: any) {
               style={styles.input}
               value={form.address}
               onChangeText={(v) => update('address', v)}
-            />
-            <TextInput
-              placeholder="Business bio"
-              multiline
-              style={[styles.input, styles.textArea]}
-              value={form.bio}
-              onChangeText={(v) => update('bio', v)}
             />
             <TextInput
               placeholder="PAN"
@@ -275,7 +247,6 @@ export default function SignUpScreen({ navigation }: any) {
   );
 }
 
-/* ---------- BUTTON ---------- */
 function PrimaryButton({ label, onPress }: any) {
   return (
     <TouchableOpacity style={styles.btn} onPress={onPress}>
@@ -284,7 +255,6 @@ function PrimaryButton({ label, onPress }: any) {
   );
 }
 
-/* ---------- STYLES ---------- */
 const styles = StyleSheet.create({
   page: {
     flexGrow: 1,
@@ -346,24 +316,5 @@ const styles = StyleSheet.create({
   optionDesc: {
     color: '#6b7280',
     marginTop: 4,
-  },
-  sub: {
-    fontWeight: '700',
-    marginBottom: 10,
-  },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 20,
-  },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 20,
-  },
-  chipActive: {
-    backgroundColor: '#93c5fd',
   },
 });

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useContext, useState } from 'react';
 import {
   View,
   Text,
@@ -6,18 +6,63 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import { loginApi } from 'src/api/auth';
+import { AuthContext } from 'src/context/AuthContext';
 
-export default function SignInScreen({ navigation, onLogin }: any) {
+export default function SignInScreen({ navigation }: any) {
+  const { login } = useContext(AuthContext);
+
+  const [emailOrUsername, setEmailOrUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const onLogin = async () => {
+    if (!emailOrUsername || !password) {
+      alert('Please fill all fields');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await loginApi({ emailOrUsername, password });
+      await login(res.user, res.token);
+      // navigation handled by auth state
+    } catch (err: any) {
+      alert(err.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.logo}>Heed</Text>
       <Text style={styles.subtitle}>Welcome back</Text>
 
-      <TextInput placeholder="Email" style={styles.input} />
-      <TextInput placeholder="Password" secureTextEntry style={styles.input} />
+      <TextInput
+        placeholder="Email or Username"
+        style={styles.input}
+        value={emailOrUsername}
+        onChangeText={setEmailOrUsername}
+        autoCapitalize="none"
+      />
 
-      <TouchableOpacity style={styles.primaryBtn} onPress={onLogin}>
-        <Text style={styles.primaryText}>Sign In</Text>
+      <TextInput
+        placeholder="Password"
+        secureTextEntry
+        style={styles.input}
+        value={password}
+        onChangeText={setPassword}
+      />
+
+      <TouchableOpacity
+        style={styles.primaryBtn}
+        onPress={onLogin}
+        disabled={loading}
+      >
+        <Text style={styles.primaryText}>
+          {loading ? 'Signing in...' : 'Sign In'}
+        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.googleBtn}>
@@ -41,7 +86,7 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: 42,
     textAlign: 'center',
-    fontFamily: 'DancingScript_700Bold', // 🖌️ Brush script
+    fontFamily: 'DancingScript_700Bold',
     marginBottom: 8,
   },
   subtitle: {

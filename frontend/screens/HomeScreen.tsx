@@ -1,143 +1,235 @@
-import React, { useState } from 'react';
-import { View, Text, Animated, StyleSheet } from 'react-native';
+import React, { useState, useRef } from 'react';
+import {
+  View,
+  Text,
+  Animated,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+  Platform,
+  StatusBar,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 
-/* ---------- Dummy Data ---------- */
+// --- DIMENSIONS & SPACING ---
+const { width } = Dimensions.get('window');
+const COLUMN_GAP = 12;
+const SIDE_PADDING = 12;
+const CARD_WIDTH = (width - (SIDE_PADDING * 2) - COLUMN_GAP) / 2;
+
+// --- DUMMY DATA ---
 const generateData = () =>
-  Array.from({ length: 20 }).map((_, i) => ({
+  Array.from({ length: 30 }).map((_, i) => ({
     id: i,
-    height: Math.floor(Math.random() * 150) + 150,
-    color: `hsl(${Math.random() * 360},70%,80%)`,
+    // Random height between 180 and 300 for variation
+    height: Math.floor(Math.random() * 120) + 180, 
+    color: `hsl(${Math.random() * 360}, 65%, 85%)`,
     title: `Post ${i + 1}`,
   }));
 
-export default function HomeScreen({
-  scrollY,
-}: {
-  scrollY: Animated.Value;
-}) {
+export default function HomeScreen({ scrollY }: { scrollY: Animated.Value }) {
+  const navigation = useNavigation<any>();
   const [data] = useState(generateData());
 
-  /* Pinterest-style balancing */
-  const left: typeof data = [];
-  const right: typeof data = [];
-  let lh = 0;
-  let rh = 0;
+  /* ---------- SMART HEADER ANIMATION (diffClamp) ---------- */
+  // 1. diffClamp tracks the "velocity" of the scroll locally
+  const scrollYClamped = Animated.diffClamp(scrollY, 0, 100);
+
+  // 2. Interpolate that local value to translate the header
+  const headerTranslate = scrollYClamped.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, -100], // Slide up 100px
+    extrapolate: 'clamp',
+  });
+
+  const headerOpacity = scrollYClamped.interpolate({
+    inputRange: [0, 60],
+    outputRange: [1, 0], // Fade out quickly
+    extrapolate: 'clamp',
+  });
+
+  /* ---------- MASONRY LAYOUT LOGIC ---------- */
+  // We split items into two columns based on current column height
+  const leftCol: typeof data = [];
+  const rightCol: typeof data = [];
+  
+  let leftHeight = 0;
+  let rightHeight = 0;
 
   data.forEach((item) => {
-    if (lh <= rh) {
-      left.push(item);
-      lh += item.height;
+    if (leftHeight <= rightHeight) {
+      leftCol.push(item);
+      leftHeight += item.height;
     } else {
-      right.push(item);
-      rh += item.height;
+      rightCol.push(item);
+      rightHeight += item.height;
     }
   });
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
-      {/* ---------- INSTAGRAM-LIKE HEADER ---------- */}
-      <View style={styles.header}>
-        <Text
-          style={styles.logo}
-        >
-          Heed
-        </Text>
-      </View>
+    <View style={styles.root}>
+      {/* STATUS BAR BACKGROUND (For translucent header effect) */}
+      <View style={styles.statusBarBg} />
 
-      {/* ---------- MASONRY ---------- */}
+      {/* ---------- HEADER ---------- */}
+      <Animated.View
+        style={[
+          styles.header,
+          {
+            transform: [{ translateY: headerTranslate }],
+            opacity: headerOpacity,
+          },
+        ]}
+      >
+        <Text style={styles.logo}>Heed</Text>
+      </Animated.View>
+
+      {/* ---------- SCROLL FEED ---------- */}
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
+          { useNativeDriver: true } // Use Native Driver for smoothness
         )}
       >
-        <View style={styles.masonryRow}>
-          {/* Left */}
+        <View style={styles.masonryContainer}>
+          {/* LEFT COLUMN */}
           <View style={styles.column}>
-            {left.map((item) => (
-              <View
+            {leftCol.map((item) => (
+              <TouchableOpacity
                 key={item.id}
+                activeOpacity={0.9}
+                onPress={() => navigation.navigate('Item', { item })}
                 style={[
                   styles.card,
-                  { height: item.height, backgroundColor: item.color },
+                  {
+                    height: item.height,
+                    backgroundColor: item.color,
+                  },
                 ]}
               >
-                <Text style={styles.cardText}>{item.title}</Text>
-              </View>
+                <View style={styles.cardOverlay}>
+                  <Text style={styles.cardTitle}>{item.title}</Text>
+                  <Text style={styles.cardSubtitle}>User Name</Text>
+                </View>
+              </TouchableOpacity>
             ))}
           </View>
 
-          {/* Right */}
+          {/* RIGHT COLUMN */}
           <View style={styles.column}>
-            {right.map((item) => (
-              <View
+            {rightCol.map((item) => (
+              <TouchableOpacity
                 key={item.id}
+                activeOpacity={0.9}
+                onPress={() => navigation.navigate('Item', { item })}
                 style={[
                   styles.card,
-                  { height: item.height, backgroundColor: item.color },
+                  {
+                    height: item.height,
+                    backgroundColor: item.color,
+                  },
                 ]}
               >
-                <Text style={styles.cardText}>{item.title}</Text>
-              </View>
+                <View style={styles.cardOverlay}>
+                  <Text style={styles.cardTitle}>{item.title}</Text>
+                  <Text style={styles.cardSubtitle}>User Name</Text>
+                </View>
+              </TouchableOpacity>
             ))}
           </View>
         </View>
       </Animated.ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 /* ---------- STYLES ---------- */
+const HEADER_HEIGHT = 60;
+const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 44;
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#fff',
   },
-
-  header: {
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+  statusBarBg: {
+    height: STATUS_BAR_HEIGHT,
+    backgroundColor: '#fff',
+    zIndex: 20,
   },
 
+  /* HEADER */
+  header: {
+    position: 'absolute',
+    top: STATUS_BAR_HEIGHT,
+    left: 0,
+    right: 0,
+    height: HEADER_HEIGHT,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+    // Subtle shadow for depth
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 3,
+  },
   logo: {
-    fontFamily: 'DancingScript_700Bold',
-    fontSize: 42,        // 🔥 BIG
+    fontFamily: 'DancingScript_700Bold', // Make sure this font is loaded in App.tsx
+    fontSize: 32,
     color: '#000',
   },
 
+  /* SCROLL CONTENT */
   scrollContent: {
-    paddingBottom: 140,
+    paddingTop: HEADER_HEIGHT + STATUS_BAR_HEIGHT + 10, // Push content down
+    paddingBottom: 100, // Space for bottom tab bar
+    paddingHorizontal: SIDE_PADDING,
   },
 
-  masonryRow: {
+  /* MASONRY GRID */
+  masonryContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
-
   column: {
-    flex: 1,
-    paddingHorizontal: 4,
+    width: CARD_WIDTH,
+    gap: COLUMN_GAP, // Native Gap (React Native 0.71+)
   },
 
+  /* CARD STYLE */
   card: {
     width: '100%',
-    borderRadius: 26,
-    marginBottom: 12,
+    borderRadius: 16,
+    marginBottom: COLUMN_GAP, // Fallback spacing
     padding: 12,
     justifyContent: 'flex-end',
+    // Card Shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
-
-  cardText: {
+  cardOverlay: {
+    // Optional: Gradient overlay effect could go here
+  },
+  cardTitle: {
+    fontSize: 16,
     fontWeight: '700',
-    color: '#374151',
+    color: '#1f2937',
+    marginBottom: 2,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: '#4b5563',
+    fontWeight: '500',
   },
 });

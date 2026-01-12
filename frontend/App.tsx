@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Animated,
   StyleSheet,
   ActivityIndicator,
   Pressable,
+  Alert,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import {
@@ -13,7 +14,10 @@ import {
 } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import * as SplashScreen from 'expo-splash-screen';
 
+/* ---------- ICONS ---------- */
 import {
   Home,
   Search,
@@ -22,10 +26,14 @@ import {
   User,
 } from 'lucide-react-native';
 
+/* ---------- FONTS ---------- */
 import {
   useFonts,
   DancingScript_700Bold,
 } from '@expo-google-fonts/dancing-script';
+
+/* ---------- SPLASH ---------- */
+import AnimatedSplash from './screens/components/AnimatedSplash';
 
 /* ---------- SCREENS ---------- */
 import HomeScreen from './screens/HomeScreen';
@@ -34,13 +42,36 @@ import CreateScreen from './screens/CreateScreen';
 import ChatScreen from './screens/ChatScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ItemScreen from './screens/ItemScreen';
+import EditImageScreen from './screens/components/EditImageScreen';
 
 /* ---------- AUTH ---------- */
 import SignInScreen from './screens/auth/SignInScreen';
 import SignUpScreen from './screens/auth/SignUpScreen';
 
+// Keep native splash visible until we are ready
+SplashScreen.preventAutoHideAsync();
+
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+
+/* ---------- HELPER: GALLERY ---------- */
+export async function openGallery(max = 4): Promise<string[] | null> {
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (status !== 'granted') {
+    Alert.alert('Permission needed', 'Please allow access to your photos');
+    return null;
+  }
+
+  const res = await ImagePicker.launchImageLibraryAsync({
+    allowsMultipleSelection: true,
+    selectionLimit: max,
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    quality: 1,
+  });
+
+  if (res.canceled) return null;
+  return res.assets.map((a) => a.uri);
+}
 
 /* ---------- FLOATING TAB BAR ---------- */
 function FloatingTabBar(
@@ -49,22 +80,33 @@ function FloatingTabBar(
   const { state, navigation, scrollY } = props;
   const translateY = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    let lastValue = 0;
+  React.useEffect(() => {
+    let lastOffset = 0;
+    let hidden = false;
 
-    const id = scrollY.addListener(({ value }) => {
-      const goingDown = value > lastValue && value > 20;
-      lastValue = value;
+    const listener = scrollY.addListener(({ value }) => {
+      const diff = value - lastOffset;
+      lastOffset = value;
 
-      Animated.timing(translateY, {
-        toValue: goingDown ? 90 : 0,
-        duration: 120,
-        useNativeDriver: true,
-      }).start();
+      if (diff > 6 && !hidden && value > 50) {
+        hidden = true;
+        Animated.timing(translateY, {
+          toValue: 100,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      } else if (diff < -6 && hidden) {
+        hidden = false;
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      }
     });
 
-    return () => scrollY.removeListener(id);
-  }, [scrollY]);
+    return () => scrollY.removeListener(listener);
+  }, []);
 
   return (
     <Animated.View style={[styles.tabBar, { transform: [{ translateY }] }]}>
@@ -72,18 +114,19 @@ function FloatingTabBar(
         const isFocused = state.index === index;
         const color = isFocused ? '#3b82f6' : '#9ca3af';
 
+        const onPress = async () => {
+          if (route.name === 'Create') {
+            const images = await openGallery(4);
+            if (images?.length) {
+              navigation.navigate('Create', { images });
+            }
+          } else {
+            navigation.navigate(route.name);
+          }
+        };
+
         return (
-          <Pressable
-            key={route.key}
-            style={styles.tabItem}
-            accessibilityRole="button"
-            accessibilityState={isFocused ? { selected: true } : {}}
-            onPress={() => {
-              if (!isFocused) {
-                navigation.navigate(route.name);
-              }
-            }}
-          >
+          <Pressable key={route.key} style={styles.tabItem} onPress={onPress}>
             {route.name === 'Home' && <Home size={24} color={color} />}
             {route.name === 'Search' && <Search size={24} color={color} />}
             {route.name === 'Create' && (
@@ -111,9 +154,7 @@ function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={{ headerShown: false }}
-      tabBar={(props) => (
-        <FloatingTabBar {...props} scrollY={scrollY} />
-      )}
+      tabBar={(props) => <FloatingTabBar {...props} scrollY={scrollY} />}
     >
       <Tab.Screen name="Home">
         {() => <HomeScreen scrollY={scrollY} />}
@@ -138,38 +179,48 @@ function AuthStack({ onLogin }: { onLogin: () => void }) {
   );
 }
 
-/* ---------- ROOT APP ---------- */
+/* ---------- ROOT ---------- */
 export default function App() {
   const [fontsLoaded] = useFonts({
     DancingScript_700Bold,
+    HeedBrush: require('./assets/fonts/HeedBrush.otf'),
   });
 
+  const [showSplash, setShowSplash] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  if (!fontsLoaded) {
-    return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-      </View>
-    );
-  }
+  if (!fontsLoaded) return null;
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {!isLoggedIn ? (
-            <Stack.Screen name="Auth">
-              {() => <AuthStack onLogin={() => setIsLoggedIn(true)} />}
-            </Stack.Screen>
-          ) : (
-            <>
-              <Stack.Screen name="Main" component={MainTabs} />
-              <Stack.Screen name="Item" component={ItemScreen} />
-            </>
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
+      <View style={{ flex: 1 }}>
+        {showSplash && (
+          <AnimatedSplash
+            onFinish={() => {
+              setShowSplash(false);
+            }}
+          />
+        )}
+
+        {/* Navigation is rendered but hidden behind splash 
+          until showSplash becomes false
+        */}
+        <NavigationContainer>
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            {!isLoggedIn ? (
+              <Stack.Screen name="Auth">
+                {() => <AuthStack onLogin={() => setIsLoggedIn(true)} />}
+              </Stack.Screen>
+            ) : (
+              <>
+                <Stack.Screen name="Main" component={MainTabs} />
+                <Stack.Screen name="Item" component={ItemScreen} />
+                <Stack.Screen name="EditImage" component={EditImageScreen} />
+              </>
+            )}
+          </Stack.Navigator>
+        </NavigationContainer>
+      </View>
     </SafeAreaProvider>
   );
 }
@@ -189,18 +240,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 10,
     shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  loader: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: '100%',
   },
 });

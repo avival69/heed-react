@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   Image,
@@ -8,195 +8,328 @@ import {
   Animated,
   PanResponder,
   Dimensions,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { ArrowLeft, Check, X, RefreshCcw, Scissors } from 'lucide-react-native';
 
-const { width, height } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const CANVAS_HEIGHT = SCREEN_HEIGHT - 140; // More space for header/footer
 
 export default function EditImageScreen({ route, navigation }: any) {
-  const { uri, onSave } = route.params;
+  const { uri, onSave } = route.params || {};
 
-  const [img, setImg] = useState(uri);
-  const [busy, setBusy] = useState(false);
+  const [currentUri, setCurrentUri] = useState(uri);
+  const [loading, setLoading] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  
+  // UX STATE: 'view' | 'crop'
+  const [mode, setMode] = useState<'view' | 'crop'>('view');
 
-  /* ---------- CROP STATE ---------- */
-  const cropX = useRef(new Animated.Value(40)).current;
-  const cropY = useRef(new Animated.Value(120)).current;
-  const cropW = useRef(new Animated.Value(220)).current;
-  const cropH = useRef(new Animated.Value(220)).current;
+  // Layout Refs
+  const layoutRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
+  const imageSizeRef = useRef({ w: 1, h: 1 });
+  
+  // Animation Refs
+  const panX = useRef(new Animated.Value(0)).current;
+  const panY = useRef(new Animated.Value(0)).current;
+  const widthVal = useRef(new Animated.Value(200)).current;
+  const heightVal = useRef(new Animated.Value(200)).current;
 
-  /* ---------- MOVE CROP ---------- */
+  // Logic Refs
+  const box = useRef({ x: 0, y: 0, w: 200, h: 200 });
+  const startBox = useRef({ x: 0, y: 0, w: 0, h: 0 }); 
+
+  /* ---------- INITIALIZE ---------- */
+  useEffect(() => {
+    if (!currentUri) return;
+    // Don't hide ready state on rotate updates to avoid flashing,
+    // only on initial load if needed, but here we keep it smooth.
+    
+    Image.getSize(currentUri, (w, h) => {
+      imageSizeRef.current = { w, h };
+      
+      const scale = Math.min(SCREEN_WIDTH / w, CANVAS_HEIGHT / h);
+      const displayW = w * scale;
+      const displayH = h * scale;
+      const offsetX = (SCREEN_WIDTH - displayW) / 2;
+      const offsetY = (CANVAS_HEIGHT - displayH) / 2;
+
+      layoutRef.current = { x: offsetX, y: offsetY, w: displayW, h: displayH };
+
+      // Reset Box to Center
+      const initW = Math.min(200, displayW * 0.8);
+      const initH = Math.min(200, displayH * 0.8);
+      const initX = offsetX + (displayW - initW) / 2;
+      const initY = offsetY + (displayH - initH) / 2;
+
+      box.current = { x: initX, y: initY, w: initW, h: initH };
+
+      panX.setValue(initX);
+      panY.setValue(initY);
+      widthVal.setValue(initW);
+      heightVal.setValue(initH);
+
+      setIsReady(true);
+    });
+  }, [currentUri]);
+
+  /* ---------- GESTURES ---------- */
   const moveResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => { startBox.current = { ...box.current }; },
       onPanResponderMove: (_, g) => {
-        cropX.setValue(40 + g.dx);
-        cropY.setValue(120 + g.dy);
+        const layout = layoutRef.current;
+        let newX = startBox.current.x + g.dx;
+        let newY = startBox.current.y + g.dy;
+
+        if (newX < layout.x) newX = layout.x;
+        if (newX + box.current.w > layout.x + layout.w) newX = (layout.x + layout.w) - box.current.w;
+        if (newY < layout.y) newY = layout.y;
+        if (newY + box.current.h > layout.y + layout.h) newY = (layout.y + layout.h) - box.current.h;
+
+        panX.setValue(newX);
+        panY.setValue(newY);
+        box.current.x = newX;
+        box.current.y = newY;
       },
     })
   ).current;
 
-  /* ---------- RESIZE HANDLE ---------- */
-  const baseW = useRef(220);  
-  const baseH = useRef(220);
   const resizeResponder = useRef(
-  PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => { startBox.current = { ...box.current }; },
+      onPanResponderMove: (_, g) => {
+        const layout = layoutRef.current;
+        let newW = startBox.current.w + g.dx;
+        let newH = startBox.current.h + g.dy;
 
-    onPanResponderMove: (_, g) => {
-      const newW = Math.max(120, baseW.current + g.dx);
-      const newH = Math.max(120, baseH.current + g.dy);
+        if (newW < 50) newW = 50;
+        if (newH < 50) newH = 50;
+        if (box.current.x + newW > layout.x + layout.w) newW = (layout.x + layout.w) - box.current.x;
+        if (box.current.y + newH > layout.y + layout.h) newH = (layout.y + layout.h) - box.current.y;
 
-      cropW.setValue(newW);
-      cropH.setValue(newH);
-    },
+        widthVal.setValue(newW);
+        heightVal.setValue(newH);
+        box.current.w = newW;
+        box.current.h = newH;
+      },
+    })
+  ).current;
 
-    onPanResponderRelease: (_, g) => {
-      baseW.current = Math.max(120, baseW.current + g.dx);
-      baseH.current = Math.max(120, baseH.current + g.dy);
-    },
-  })
-).current;
-
-
-  /* ---------- ROTATE ---------- */
-  const rotate = async () => {
-    if (busy) return;
-    setBusy(true);
-
-    const res = await ImageManipulator.manipulateAsync(
-      img,
-      [{ rotate: 90 }],
-      { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
-    );
-
-    setImg(res.uri);
-    setBusy(false);
+  /* ---------- ACTIONS ---------- */
+  const handleRotate = async () => {
+    if (loading) return;
+    setLoading(true);
+    // Rotating exits crop mode automatically to prevent math errors
+    setMode('view'); 
+    
+    try {
+      const res = await ImageManipulator.manipulateAsync(
+        currentUri, 
+        [{ rotate: 90 }], 
+        { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      setCurrentUri(res.uri);
+    } catch (e) {
+      console.log(e);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  /* ---------- CROP ---------- */
-  const crop = async () => {
-    if (busy) return;
-    setBusy(true);
+  const applyCrop = async () => {
+    if (loading) return;
+    setLoading(true);
 
-    const x = Math.max(0, Math.floor((cropX as any)._value));
-    const y = Math.max(0, Math.floor((cropY as any)._value));
-    const w = Math.floor((cropW as any)._value);
-    const h = Math.floor((cropH as any)._value);
+    try {
+      const layout = layoutRef.current;
+      const imgW = imageSizeRef.current.w;
+      const imgH = imageSizeRef.current.h;
 
-    const res = await ImageManipulator.manipulateAsync(
-      img,
-      [
-        {
+      const scaleX = imgW / layout.w;
+      const scaleY = imgH / layout.h;
+
+      const relativeX = box.current.x - layout.x;
+      const relativeY = box.current.y - layout.y;
+
+      const originX = Math.max(0, relativeX * scaleX);
+      const originY = Math.max(0, relativeY * scaleY);
+      const w = box.current.w * scaleX;
+      const h = box.current.h * scaleY;
+
+      const res = await ImageManipulator.manipulateAsync(
+        currentUri,
+        [{
           crop: {
-            originX: x,
-            originY: y,
-            width: w,
-            height: h,
-          },
-        },
-      ],
-      { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
-    );
-
-    setImg(res.uri);
-    setBusy(false);
+            originX, originY,
+            width: Math.min(w, imgW - originX),
+            height: Math.min(h, imgH - originY),
+          }
+        }],
+        { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      setCurrentUri(res.uri);
+      setMode('view'); // Exit crop mode on success
+    } catch (error) {
+      Alert.alert("Error", "Could not crop image.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  /* ---------- SAVE ---------- */
-  const save = () => {
-    onSave?.(img);
+  const handleSave = () => {
+    if (onSave) onSave(currentUri);
     navigation.goBack();
   };
 
   return (
-    <View style={styles.root}>
-      <Image source={{ uri: img }} style={styles.image} />
+    <View style={styles.container}>
+      {/* HEADER */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <ArrowLeft color="#fff" size={24} />
+        </TouchableOpacity>
+        
+        {/* Only show DONE in View mode */}
+        {mode === 'view' && (
+          <TouchableOpacity onPress={handleSave}>
+            <Text style={styles.saveText}>Done</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
-      {/* CROP BOX */}
-      <Animated.View
-        {...moveResponder.panHandlers}
-        style={[
-          styles.cropBox,
-          {
-            transform: [
-              { translateX: cropX },
-              { translateY: cropY },
-            ],
-            width: cropW,
-            height: cropH,
-          },
-        ]}
-      >
-        {/* RESIZE HANDLE */}
-        <Animated.View
-          {...resizeResponder.panHandlers}
-          style={styles.resizeHandle}
+      {/* CANVAS */}
+      <View style={styles.canvas}>
+        <Image 
+          source={{ uri: currentUri }} 
+          style={styles.image} 
+          resizeMode="contain" 
         />
-      </Animated.View>
+        
+        {loading && (
+          <View style={styles.loaderOverlay}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+          </View>
+        )}
 
-      {/* ACTION BAR */}
-      <View style={styles.bar}>
-        <TouchableOpacity onPress={rotate}>
-          <Text style={styles.btn}>Rotate</Text>
-        </TouchableOpacity>
+        {/* CROP BOX: Only visible in 'crop' mode */}
+        {!loading && isReady && mode === 'crop' && (
+          <Animated.View
+            {...moveResponder.panHandlers}
+            style={[
+              styles.cropBox,
+              {
+                transform: [{ translateX: panX }, { translateY: panY }],
+                width: widthVal,
+                height: heightVal,
+              },
+            ]}
+          >
+            <View style={[styles.gridLine, { left: '33%', width: 1, height: '100%' }]} />
+            <View style={[styles.gridLine, { left: '66%', width: 1, height: '100%' }]} />
+            <View style={[styles.gridLine, { top: '33%', height: 1, width: '100%' }]} />
+            <View style={[styles.gridLine, { top: '66%', height: 1, width: '100%' }]} />
 
-        <TouchableOpacity onPress={crop}>
-          <Text style={styles.btn}>Crop</Text>
-        </TouchableOpacity>
+            <Animated.View 
+              {...resizeResponder.panHandlers}
+              style={styles.resizeHandle}
+            />
+          </Animated.View>
+        )}
+      </View>
 
-        <TouchableOpacity onPress={save}>
-          <Text style={styles.btnPrimary}>Save</Text>
-        </TouchableOpacity>
+      {/* FOOTER */}
+      <View style={styles.footer}>
+        {mode === 'view' ? (
+          // VIEW MODE TOOLS
+          <>
+            <TouchableOpacity style={styles.tool} onPress={handleRotate}>
+              <RefreshCcw color="#fff" size={20} />
+              <Text style={styles.toolText}>Rotate</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.tool} onPress={() => setMode('crop')}>
+              <Scissors color="#fff" size={20} />
+              <Text style={styles.toolText}>Crop</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          // CROP MODE TOOLS
+          <>
+            <TouchableOpacity style={styles.iconBtnSecondary} onPress={() => setMode('view')}>
+              <X color="#fff" size={24} />
+            </TouchableOpacity>
+
+            <Text style={styles.modeTitle}>Adjust Crop</Text>
+
+            <TouchableOpacity style={styles.iconBtnPrimary} onPress={applyCrop}>
+              <Check color="#000" size={24} />
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </View>
   );
 }
 
-/* ---------- STYLES ---------- */
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#000',
+  container: { flex: 1, backgroundColor: '#000' },
+  header: { 
+    height: 60, marginTop: 40, 
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', 
+    paddingHorizontal: 20 
   },
-  image: {
-    width,
-    height: height - 80,
-    resizeMode: 'contain',
+  saveText: { color: '#3b82f6', fontWeight: '700', fontSize: 16 },
+  
+  canvas: { 
+    width: SCREEN_WIDTH, height: CANVAS_HEIGHT, 
+    backgroundColor: '#111', overflow: 'hidden',
+    justifyContent: 'center',
   },
+  image: { width: '100%', height: '100%' },
+  loaderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center', alignItems: 'center',
+    zIndex: 20
+  },
+  
   cropBox: {
-    position: 'absolute',
-    borderWidth: 2,
-    borderColor: '#3b82f6',
-    backgroundColor: 'rgba(59,130,246,0.15)',
+    position: 'absolute', top: 0, left: 0, 
+    borderWidth: 1, borderColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  gridLine: {
+    position: 'absolute', backgroundColor: 'rgba(255,255,255,0.3)',
   },
   resizeHandle: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    right: -12,
-    bottom: -12,
-    backgroundColor: '#3b82f6',
-    borderRadius: 12,
+    position: 'absolute', right: -20, bottom: -20,
+    width: 44, height: 44,
+    backgroundColor: '#3b82f6', borderRadius: 22,
+    borderWidth: 3, borderColor: '#fff',
+    zIndex: 99,
   },
-  bar: {
-    position: 'absolute',
-    bottom: 0,
-    height: 70,
-    left: 0,
-    right: 0,
-    backgroundColor: '#111',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+  
+  footer: {
+    position: 'absolute', bottom: 0, width: '100%', height: 100,
+    flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center',
+    backgroundColor: '#000',
+    paddingHorizontal: 20,
   },
-  btn: {
-    color: '#fff',
-    fontSize: 16,
+  tool: { alignItems: 'center', gap: 5 },
+  toolText: { color: '#fff', fontSize: 12 },
+  modeTitle: { color: '#9ca3af', fontSize: 14, fontWeight: '600' },
+  
+  iconBtnPrimary: {
+    width: 50, height: 50, borderRadius: 25,
+    backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center'
   },
-  btnPrimary: {
-    color: '#3b82f6',
-    fontSize: 16,
-    fontWeight: '700',
+  iconBtnSecondary: {
+    width: 50, height: 50, borderRadius: 25,
+    backgroundColor: '#333', justifyContent: 'center', alignItems: 'center'
   },
 });

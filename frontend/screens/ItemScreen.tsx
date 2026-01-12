@@ -7,43 +7,38 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
-  Modal,
-  TextInput,
   Dimensions,
   Platform,
-  SafeAreaView as RNSafeAreaView
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ArrowLeft,
   Heart,
   MessageCircle,
   Share2,
-  Repeat, // Used for Tuck-in/Repost
-  MoreHorizontal,
-  Send,
-  X
+  Repeat, // Used for Tuck-in/Repost icon
+  Star,
 } from 'lucide-react-native';
 
-const { width, height } = Dimensions.get('window');
+// Import the detached component
+import CommentsSheet from '../screens/components/CommentsSheet'; 
+
+const { width } = Dimensions.get('window');
 
 /* ---------- DUMMY DATA ---------- */
 const RELATED_ITEMS = Array.from({ length: 6 }).map((_, i) => ({
   id: i,
-  height: i % 2 === 0 ? 180 : 240,
-  // Professional muted pastel tones
-  color: i % 2 === 0 ? '#F3F4F6' : '#E5E7EB',
-  image: `https://images.unsplash.com/photo-${i % 2 === 0 ? '1515886657613-9f3515b0c78f' : '1539008835657-9e8e9680c956'}?auto=format&fit=crop&w=300&q=80`
+  height: i % 2 === 0 ? 180 : 260,
+  image: `https://images.unsplash.com/photo-${
+    i % 2 === 0 ? '1515886657613-9f3515b0c78f' : '1539008835657-9e8e9680c956'
+  }?auto=format&fit=crop&w=400&q=80`,
 }));
-
-const COMMENTS = [
-  { id: 1, user: 'alex_design', text: 'Is the material breathable?', time: '2m' },
-  { id: 2, user: 'sarah_styles', text: 'Love this fit! 😍', time: '1h' },
-  { id: 3, user: 'mike_studio', text: 'Do you ship to Canada?', time: '3h' },
-];
 
 export default function ItemScreen() {
   const navigation = useNavigation<any>();
+  
+  // State
   const [isLiked, setIsLiked] = useState(false);
   const [showComments, setShowComments] = useState(false);
 
@@ -57,7 +52,7 @@ export default function ItemScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         bounces={false}
       >
         {/* ---------- HERO IMAGE SECTION ---------- */}
@@ -70,30 +65,31 @@ export default function ItemScreen() {
             resizeMode="cover"
           />
           
-          {/* Gradient Overlay for text visibility if needed, or just relying on buttons */}
           <View style={styles.imageOverlay} />
 
-          {/* Header Actions (Floating) */}
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.glassButton}
-              onPress={() => navigation.goBack()}
-            >
-              <ArrowLeft size={22} color="#fff" />
-            </TouchableOpacity>
+          {/* Floating Header Actions */}
+          <SafeAreaView style={styles.headerSafe} edges={['top']}>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={styles.glassButton}
+                onPress={() => navigation.goBack()}
+              >
+                <ArrowLeft size={22} color="#fff" />
+              </TouchableOpacity>
 
-            <TouchableOpacity style={styles.glassButton}>
-              <Share2 size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity style={styles.glassButton}>
+                <Share2 size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
         </View>
 
-        {/* ---------- CONTENT CARD ---------- */}
+        {/* ---------- MAIN CONTENT CARD ---------- */}
         <View style={styles.card}>
-          {/* Handle bar visual */}
+          {/* Handle Bar Visual */}
           <View style={styles.handleBar} />
 
-          {/* Seller & Meta */}
+          {/* Seller & Meta Info */}
           <View style={styles.metaRow}>
             <View style={styles.sellerContainer}>
               <Image 
@@ -102,25 +98,32 @@ export default function ItemScreen() {
               />
               <View>
                 <Text style={styles.sellerName}>Studio SDK</Text>
-                <Text style={styles.sellerRating}>4.9 ★ Verified</Text>
+                <View style={styles.ratingRow}>
+                  <Star size={12} color="#F59E0B" fill="#F59E0B" />
+                  <Text style={styles.sellerRating}>4.9 • Verified</Text>
+                </View>
               </View>
             </View>
             <Text style={styles.price}>₹2,000</Text>
           </View>
 
-          {/* Title & Description */}
+          {/* Product Details */}
           <Text style={styles.title}>Polka Dot Halter Midi</Text>
           <Text style={styles.description}>
             A classic silhouette with a modern neckline. Designed for comfort
             and elegance using premium sustainable cotton. Perfect for summer evenings.
           </Text>
 
-          {/* ---------- INTERACTION ROW ---------- */}
+          {/* ---------- INTERACTION BAR ---------- */}
           <View style={styles.interactionRow}>
             <View style={styles.socialActions}>
-              <TouchableOpacity onPress={() => setIsLiked(!isLiked)} style={styles.iconBtn}>
+              <TouchableOpacity 
+                onPress={() => setIsLiked(!isLiked)} 
+                style={styles.iconBtn}
+                activeOpacity={0.7}
+              >
                 <Heart
-                  size={24}
+                  size={26}
                   color={isLiked ? '#ef4444' : '#1f2937'}
                   fill={isLiked ? '#ef4444' : 'transparent'}
                 />
@@ -130,14 +133,15 @@ export default function ItemScreen() {
               <TouchableOpacity 
                 onPress={() => setShowComments(true)} 
                 style={styles.iconBtn}
+                activeOpacity={0.7}
               >
-                <MessageCircle size={24} color="#1f2937" />
+                <MessageCircle size={26} color="#1f2937" />
                 <Text style={styles.iconText}>100</Text>
               </TouchableOpacity>
             </View>
 
-            {/* TUCK IN BUTTON (Repost) */}
-            <TouchableOpacity style={styles.tuckInButton}>
+            {/* Repost / Tuck-in Button */}
+            <TouchableOpacity style={styles.tuckInButton} activeOpacity={0.8}>
               <Repeat size={16} color="#fff" strokeWidth={3} />
               <Text style={styles.tuckInText}>Tuck-in</Text>
             </TouchableOpacity>
@@ -148,18 +152,28 @@ export default function ItemScreen() {
           {/* ---------- MASONRY GRID ---------- */}
           <Text style={styles.sectionTitle}>More like this</Text>
           <View style={styles.masonryContainer}>
+            {/* Left Column */}
             <View style={styles.masonryColumn}>
               {RELATED_ITEMS.filter((_, i) => i % 2 === 0).map((item) => (
-                <View key={item.id} style={[styles.masonryItem, { height: item.height }]}>
+                <TouchableOpacity 
+                  key={item.id} 
+                  activeOpacity={0.9}
+                  style={[styles.masonryItem, { height: item.height }]}
+                >
                    <Image source={{ uri: item.image }} style={styles.masonryImage} />
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
+            {/* Right Column */}
             <View style={styles.masonryColumn}>
               {RELATED_ITEMS.filter((_, i) => i % 2 !== 0).map((item) => (
-                <View key={item.id} style={[styles.masonryItem, { height: item.height }]}>
+                <TouchableOpacity 
+                  key={item.id} 
+                  activeOpacity={0.9}
+                  style={[styles.masonryItem, { height: item.height }]}
+                >
                   <Image source={{ uri: item.image }} style={styles.masonryImage} />
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           </View>
@@ -168,67 +182,17 @@ export default function ItemScreen() {
 
       {/* ---------- BOTTOM CTA ---------- */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.chatButton}>
+        <TouchableOpacity style={styles.chatButton} activeOpacity={0.9}>
           <Text style={styles.chatButtonText}>Chat with Seller</Text>
         </TouchableOpacity>
       </View>
 
-      {/* ---------- COMMENT BOTTOM SHEET ---------- */}
-      <Modal
+      {/* ---------- CONNECTED COMMENT SYSTEM ---------- */}
+      <CommentsSheet 
         visible={showComments}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowComments(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
-          onPress={() => setShowComments(false)}
-        >
-          <TouchableOpacity 
-            activeOpacity={1} 
-            style={styles.modalContent} 
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Comments (100)</Text>
-              <TouchableOpacity onPress={() => setShowComments(false)} style={styles.closeBtn}>
-                <X size={20} color="#374151" />
-              </TouchableOpacity>
-            </View>
-
-            {/* List */}
-            <ScrollView style={styles.commentList}>
-              {COMMENTS.map((c) => (
-                <View key={c.id} style={styles.commentItem}>
-                  <View style={styles.commentAvatar} />
-                  <View style={{flex: 1}}>
-                    <View style={styles.commentRow}>
-                      <Text style={styles.commentUser}>{c.user}</Text>
-                      <Text style={styles.commentTime}>{c.time}</Text>
-                    </View>
-                    <Text style={styles.commentText}>{c.text}</Text>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-
-            {/* Input */}
-            <View style={styles.commentInputArea}>
-              <TextInput 
-                placeholder="Add a comment..." 
-                placeholderTextColor="#9ca3af"
-                style={styles.input} 
-              />
-              <TouchableOpacity>
-                <Send size={20} color="#3b82f6" />
-              </TouchableOpacity>
-            </View>
-            <RNSafeAreaView edges={['bottom']} />
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+        onClose={() => setShowComments(false)}
+        postId="item_123" // Pass real ID here for DB queries
+      />
     </View>
   );
 }
@@ -243,7 +207,7 @@ const styles = StyleSheet.create({
   // HERO IMAGE
   imageContainer: {
     width: '100%',
-    height: 480, // Taller image
+    height: 500,
     position: 'relative',
   },
   image: {
@@ -252,26 +216,31 @@ const styles = StyleSheet.create({
   },
   imageOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.1)', // Subtle darken
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  headerSafe: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
   headerActions: {
-    position: 'absolute',
-    top: Platform.OS === 'android' ? 40 : 50, // Clear status bar
-    left: 20,
-    right: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    zIndex: 10,
+    paddingHorizontal: 20,
+    marginTop: 10,
   },
   glassButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.3)', // Glass morphism effect
+    backgroundColor: 'rgba(0,0,0,0.25)', // Semi-transparent black
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.15)',
+    backdropFilter: 'blur(10px)', // Works on some versions/web, falls back gracefully
   },
 
   // CARD CONTENT
@@ -301,26 +270,34 @@ const styles = StyleSheet.create({
   sellerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
   },
   sellerName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: '#111827',
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
   },
   sellerRating: {
     fontSize: 12,
     color: '#6B7280',
-    marginTop: 2,
+    fontWeight: '500',
   },
   price: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
     color: '#111827',
   },
@@ -328,7 +305,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     color: '#1f2937',
-    marginBottom: 8,
+    marginBottom: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -348,31 +325,31 @@ const styles = StyleSheet.create({
   },
   socialActions: {
     flexDirection: 'row',
-    gap: 20,
+    gap: 24,
   },
   iconBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   iconText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
     color: '#374151',
   },
   tuckInButton: {
-    backgroundColor: '#111827', // Strong Dark Button
+    backgroundColor: '#111827',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     borderRadius: 100,
     gap: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 5,
   },
   tuckInText: {
     color: '#fff',
@@ -385,10 +362,10 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
 
-  // MASONRY
+  // MASONRY GRID
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#111827',
     marginBottom: 16,
   },
@@ -401,7 +378,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   masonryItem: {
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: '#f3f4f6',
   },
@@ -425,104 +402,20 @@ const styles = StyleSheet.create({
     borderTopColor: '#f3f4f6',
   },
   chatButton: {
-    backgroundColor: '#3b82f6',
-    height: 52,
-    borderRadius: 14,
+    backgroundColor: '#3b82f6', // Bright primary blue
+    height: 54,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#3b82f6',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 10,
+    elevation: 6,
   },
   chatButtonText: {
     color: '#fff',
     fontWeight: '700',
     fontSize: 16,
-  },
-
-  // COMMENT SHEET (MODAL)
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    height: '60%',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  closeBtn: {
-    padding: 4,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 20,
-  },
-  commentList: {
-    paddingHorizontal: 20,
-  },
-  commentItem: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f9fafb',
-  },
-  commentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E5E7EB',
-  },
-  commentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  commentUser: {
-    fontWeight: '600',
-    fontSize: 14,
-    color: '#1f2937',
-  },
-  commentTime: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  commentText: {
-    fontSize: 14,
-    color: '#4B5563',
-    lineHeight: 20,
-  },
-  commentInputArea: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
-    gap: 12,
-  },
-  input: {
-    flex: 1,
-    height: 40,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    color: '#1f2937',
   },
 });

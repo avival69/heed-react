@@ -168,12 +168,10 @@ function MainTabs() {
 }
 
 /* ---------- AUTH STACK ---------- */
-function AuthStack({ onLogin }: { onLogin: () => void }) {
+function AuthStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="SignIn">
-        {(props) => <SignInScreen {...props} onLogin={onLogin} />}
-      </Stack.Screen>
+      <Stack.Screen name="SignIn" component={SignInScreen} />
       <Stack.Screen name="SignUp" component={SignUpScreen} />
     </Stack.Navigator>
   );

@@ -1,111 +1,100 @@
-import mongoose, { Schema, Document, model } from "mongoose";
+import { Schema, Document, model } from "mongoose";
 
 export interface IUser extends Document {
-  //Common mandatory fields
-  userType: "general" | "business";
+  // --- Common Mandatory Fields ---
+  userType: "general" | "business" | "admin";
   username: string;
   name: string;
   email: string;
   password: string;
   phone: string;
+  isVerified: boolean;
 
-  // Common optional fields
-  age?: number;
+  // --- Common Optional Fields ---
   bio?: string;
-  gender?: "male" | "female" | "other";
+  profilePic?: string; // ✅ New
+  bannerImg?: string;  // ✅ New
+  location?: string;   // ✅ New
   interests?: string[];
 
-  // Business-only fields
+  // --- General User Specific ---
+  age?: number;
+  gender?: "Male" | "Female" | "Other";
+
+  // --- Business User Specific ---
   companyName?: string;
+  country?: string;    // ✅ New
   address?: string;
-  PAN?: string;
-  Aadhar?: string;
-  GST?: string;
+  gstNumber?: string;  // ✅ Renamed from GST
+  
+  // Verification & Store
+  idProofType?: string; // ✅ Generic (PAN, Aadhar, License)
+  idProofUrl?: string;  // ✅ URL to the uploaded doc
+  productType?: string; // ✅ New
+  cashOnDeliveryAvailable?: boolean; // ✅ New
 }
 
 const userSchema = new Schema<IUser>(
   {
     userType: {
       type: String,
-      enum: ["general", "business"],
+      enum: ["general", "business", "admin"],
       required: true,
     },
-    username: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
-      index: true,
+    // ✅ Logic: Business users start unverified
+    isVerified: {
+      type: Boolean,
+      default: function (this: IUser) {
+        return this.userType !== "business";
+      },
     },
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,//removes leading and trailing spaces
-      index: true,//creates an index for faster search
-    },
-    password: {
-      type: String,
-      required: true,
-    },
-    phone: {
-      type: String,
-      required: true,
-    },
-    // Common optional fields
-    age: Number,
+    username: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    password: { type: String, required: true },
+    phone: { type: String, required: true },
+
+    // --- Profile Assets ---
     bio: { type: String, trim: true },
-    gender: { type: String, enum: ["male", "female", "other"] },
+    profilePic: { type: String, default: "" },
+    bannerImg: { type: String, default: "" },
+    location: { type: String, trim: true },
     interests: [{ type: String, trim: true }],
-    // Business fields
+
+    // --- General Specific ---
+    age: Number,
+    gender: { type: String, enum: ["Male", "Female", "Other"] },
+
+    // --- Business Specific ---
     companyName: {
       type: String,
       trim: true,
-      required: function (this: IUser) {
-        return this.userType === "business";
-      },//required if userType is business
+      required: function (this: IUser) { return this.userType === "business"; },
     },
+    country: { type: String, trim: true },
     address: { type: String, trim: true },
-    PAN: { type: String, trim: true },
-    Aadhar: { type: String, trim: true },
-    GST: { type: String, trim: true },
+    gstNumber: { type: String, trim: true }, // Optional, not all businesses have GST immediately
+    
+    // Identity Proof
+    idProofType: { type: String, trim: true },
+    idProofUrl: { type: String, trim: true },
+    
+    // Store Settings
+    productType: { type: String, trim: true },
+    cashOnDeliveryAvailable: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
-// Business validation: at least one of PAN/Aadhar/GST for business users
-userSchema.pre("save", function (next) { //this is a pre-save hook, runs before 
-// saving a document to MongoDB
-  if (
-    this.userType === "business" &&
-    !this.PAN &&
-    !this.Aadhar &&
-    !this.GST
-  ) {
-    return next(
-      new Error(
-        "At least one of PAN, Aadhar, or GST is required for business users"
-      )
-    );
+// ✅ Updated Business Validation Hook
+userSchema.pre("save", function (next) {
+  if (this.userType === "business") {
+    // Ensure they provided an ID Proof URL
+    if (!this.idProofUrl || !this.idProofType) {
+      return next(new Error("Business accounts require a valid ID proof upload."));
+    }
   }
   next();
 });
-
-// Case-insensitive unique indexes
-userSchema.index(
-  { email: 1 },//index created in ascending order, descending order also same for unique
-  { unique: true, collation: { locale: "en", strength: 2 } }
-);
-userSchema.index(
-  { username: 1 },
-  { unique: true, collation: { locale: "en", strength: 2 } }//strength 2 for case insensitivity
-);
 
 export default model<IUser>("User", userSchema);

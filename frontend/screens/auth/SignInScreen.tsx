@@ -25,6 +25,14 @@ export default function SignInScreen({ navigation }: any) {
     try {
       setLoading(true);
       const res = await loginApi({ emailOrUsername, password });
+
+      // ✅ CHECK VERIFICATION STATUS
+      // If user is business and NOT verified, redirect to pending screen
+      if (res.user.userType === 'business' && res.user.isVerified === false) {
+        navigation.navigate('PendingVerification');
+        return; 
+      }
+
       await login(res.user, res.token);
       // navigation handled by auth state
     } catch (err: any) {

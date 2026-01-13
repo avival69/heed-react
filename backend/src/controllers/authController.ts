@@ -10,17 +10,33 @@ const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
 ======================= */
 
 interface SignupRequestBody {
-  userType: "general" | "business";
+  userType: "general" | "business" | "admin";
   username: string;
   email: string;
   password: string;
   name: string;
   phone: string;
+
+  // Common Optional
+  bio?: string;
+  profilePic?: string;
+  bannerImg?: string;
+  location?: string;
+  interests?: string[];
+
+  // General fields
+  age?: number;
+  gender?: "Male" | "Female" | "Other";
+
+  // Business fields
   companyName?: string;
+  country?: string;
   address?: string;
-  PAN?: string;
-  Aadhar?: string;
-  GST?: string;
+  gstNumber?: string;
+  idType?: string;      // Maps to idProofType
+  idDoc?: string;       // Maps to idProofUrl
+  productType?: string;
+  cashOnDelivery?: boolean;
 }
 
 interface LoginRequestBody {
@@ -44,40 +60,49 @@ export const signup = async (
       password,
       name,
       phone,
+      // Optional & Profile
+      bio,
+      profilePic,
+      bannerImg,
+      location,
+      interests,
+      // General
+      age,
+      gender,
+      // Business
       companyName,
+      country,
       address,
-      PAN,
-      Aadhar,
-      GST,
+      gstNumber,
+      idType,      // Incoming from Frontend
+      idDoc,       // Incoming from Frontend
+      productType,
+      cashOnDelivery,
     } = req.body;
 
-    // Validate required fields
+    // 1. Basic Validation
     if (!userType || !username || !email || !password || !name || !phone) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Normalize email and username
+    // 2. Normalize Data
     const normalizedEmail = email.toLowerCase().trim();
     const normalizedUsername = username.toLowerCase().trim();
 
-    // Check if user already exists
+    // 3. Check Duplicates
     const existingUser = await User.findOne({
       $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
     });
 
     if (existingUser) {
-      if (existingUser.email === normalizedEmail) {
-        return res.status(400).json({ message: "Email already exists" });
-      }
-      if (existingUser.username === normalizedUsername) {
-        return res.status(400).json({ message: "Username already exists" });
-      }
+      if (existingUser.email === normalizedEmail) return res.status(400).json({ message: "Email already exists" });
+      if (existingUser.username === normalizedUsername) return res.status(400).json({ message: "Username already exists" });
     }
 
-    // Hash password
+    // 4. Hash Password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // 5. Create User Object
     const newUser = new User({
       userType,
       username: normalizedUsername,
@@ -85,24 +110,40 @@ export const signup = async (
       password: hashedPassword,
       name,
       phone,
+      
+      // Common Profile Data
+      bio,
+      profilePic, 
+      bannerImg, 
+      location,
+      interests,
+
+      // General Logic
+      age: userType === "general" && age ? Number(age) : undefined,
+      gender: userType === "general" ? gender : undefined,
+
+      // Business Logic
       companyName: userType === "business" ? companyName : undefined,
+      country: userType === "business" ? country : undefined,
       address: userType === "business" ? address : undefined,
-      PAN: userType === "business" ? PAN : undefined,
-      Aadhar: userType === "business" ? Aadhar : undefined,
-      GST: userType === "business" ? GST : undefined,
+      gstNumber: userType === "business" ? gstNumber : undefined,
+      
+      // Map Frontend ID fields to Schema fields
+      idProofType: userType === "business" ? idType : undefined,
+      idProofUrl: userType === "business" ? idDoc : undefined,
+      
+      productType: userType === "business" ? productType : undefined,
+      cashOnDeliveryAvailable: userType === "business" ? cashOnDelivery : false,
     });
 
+    // Note: isVerified is set automatically by the Model (Business=false, General=true)
     await newUser.save();
 
-    // Generate JWT
-    const token = jwt.sign(
-      { id: newUser._id },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    // 6. Generate Token
+    const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: "7d" });
 
     return res.status(201).json({
-      message: "User created successfully",
+      message: userType === 'business' ? "Application submitted for review" : "User created successfully",
       token,
       user: {
         _id: newUser._id,
@@ -111,18 +152,23 @@ export const signup = async (
         userType: newUser.userType,
         name: newUser.name,
         phone: newUser.phone,
+        isVerified: newUser.isVerified, // Critical for frontend redirection
+        profilePic: newUser.profilePic,
       },
     });
+
   } catch (error: any) {
-    console.error("SIGNUP BACKEND ERROR:", error);
-    return res.status(500).json({
-      message: error.message || "Server error",
-    });
+    console.error("SIGNUP ERROR:", error);
+    // Handle Mongoose Validation Errors nicely
+    if (error.name === 'ValidationError') {
+        return res.status(400).json({ message: error.message });
+    }
+    return res.status(500).json({ message: "Server error during signup" });
   }
 };
 
 /* =======================
-          LOGIN
+         LOGIN
 ======================= */
 
 export const login = async (
@@ -133,9 +179,7 @@ export const login = async (
     const { emailOrUsername, password } = req.body;
 
     if (!emailOrUsername || !password) {
-      return res
-        .status(400)
-        .json({ message: "Email/Username and password required" });
+      return res.status(400).json({ message: "Email/Username and password required" });
     }
 
     const normalized = emailOrUsername.toLowerCase().trim();
@@ -144,20 +188,12 @@ export const login = async (
       $or: [{ email: normalized }, { username: normalized }],
     });
 
-    if (!user) {
-      return res.status(400).json({ message: "User not found" });
-    }
+    if (!user) return res.status(400).json({ message: "User not found" });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
+    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
-    const token = jwt.sign(
-      { id: user._id },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "7d" });
 
     return res.status(200).json({
       message: "Login successful",
@@ -169,12 +205,12 @@ export const login = async (
         userType: user.userType,
         name: user.name,
         phone: user.phone,
+        isVerified: user.isVerified,
+        profilePic: user.profilePic,
       },
     });
   } catch (error: any) {
-    console.error("LOGIN BACKEND ERROR:", error);
-    return res.status(500).json({
-      message: error.message || "Server error",
-    });
+    console.error("LOGIN ERROR:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };

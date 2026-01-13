@@ -3,8 +3,6 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
-
 /* =======================
    REQUEST BODY TYPES
 ======================= */
@@ -47,12 +45,14 @@ interface LoginRequestBody {
 /* =======================
         SIGNUP
 ======================= */
-
 export const signup = async (
   req: Request<{}, {}, SignupRequestBody>,
   res: Response
 ) => {
   try {
+    const JWT_SECRET = process.env.JWT_SECRET!;
+    if (!JWT_SECRET) throw new Error("JWT_SECRET is not defined in .env");
+
     const {
       userType,
       username,
@@ -80,16 +80,13 @@ export const signup = async (
       cashOnDelivery,
     } = req.body;
 
-    // 1. Basic Validation
     if (!userType || !username || !email || !password || !name || !phone) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // 2. Normalize Data
     const normalizedEmail = email.toLowerCase().trim();
     const normalizedUsername = username.toLowerCase().trim();
 
-    // 3. Check Duplicates
     const existingUser = await User.findOne({
       $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
     });
@@ -99,10 +96,8 @@ export const signup = async (
       if (existingUser.username === normalizedUsername) return res.status(400).json({ message: "Username already exists" });
     }
 
-    // 4. Hash Password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 5. Create User Object
     const newUser = new User({
       userType,
       username: normalizedUsername,
@@ -139,8 +134,15 @@ export const signup = async (
     // Note: isVerified is set automatically by the Model (Business=false, General=true)
     await newUser.save();
 
-    // 6. Generate Token
-    const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign(
+      {
+        _id: newUser._id,
+        username: newUser.username,
+        userType: newUser.userType,
+      },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     return res.status(201).json({
       message: userType === 'business' ? "Application submitted for review" : "User created successfully",
@@ -158,24 +160,22 @@ export const signup = async (
     });
 
   } catch (error: any) {
-    console.error("SIGNUP ERROR:", error);
-    // Handle Mongoose Validation Errors nicely
-    if (error.name === 'ValidationError') {
-        return res.status(400).json({ message: error.message });
-    }
-    return res.status(500).json({ message: "Server error during signup" });
+    console.error("SIGNUP BACKEND ERROR:", error);
+    return res.status(500).json({ message: error.message || "Server error" });
   }
 };
 
 /* =======================
          LOGIN
 ======================= */
-
 export const login = async (
   req: Request<{}, {}, LoginRequestBody>,
   res: Response
 ) => {
   try {
+    const JWT_SECRET = process.env.JWT_SECRET!;
+    if (!JWT_SECRET) throw new Error("JWT_SECRET is not defined in .env");
+
     const { emailOrUsername, password } = req.body;
 
     if (!emailOrUsername || !password) {
@@ -191,9 +191,18 @@ export const login = async (
     if (!user) return res.status(400).json({ message: "User not found" });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+    if (!isMatch)
+      return res.status(400).json({ message: "Invalid credentials" });
 
-    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign(
+      {
+        _id: user._id,
+        username: user.username,
+        userType: user.userType,
+      },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     return res.status(200).json({
       message: "Login successful",
@@ -210,7 +219,7 @@ export const login = async (
       },
     });
   } catch (error: any) {
-    console.error("LOGIN ERROR:", error);
-    return res.status(500).json({ message: "Server error" });
+    console.error("LOGIN BACKEND ERROR:", error);
+    return res.status(500).json({ message: error.message || "Server error" });
   }
 };

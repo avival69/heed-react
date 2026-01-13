@@ -1,25 +1,49 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import User, { IUser } from "../models/User.js";
-
-const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
+import { Types } from "mongoose";
 
 export interface AuthRequest extends Request {
-  user?: IUser;
+  user?: {
+    _id: Types.ObjectId;
+    username?: string;
+    userType?: string;
+  };
 }
 
-export const requireAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "Unauthorized" });
-
+export const requireAuth = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const decoded: any = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.id);
-    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    const JWT_SECRET = process.env.JWT_SECRET!;
+    if (!JWT_SECRET) throw new Error("JWT_SECRET is not defined in .env");
 
-    req.user = user;
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ message: "Unauthorized: No token" });
+    }
+
+    const token = authHeader.split(" ")[1]; // Bearer <token>
+    if (!token) {
+      return res.status(401).json({ message: "Unauthorized: Invalid token" });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+
+    if (!decoded || !decoded._id) {
+      return res.status(401).json({ message: "Unauthorized: Invalid token" });
+    }
+
+    (req as AuthRequest).user = {
+      _id: new Types.ObjectId(decoded._id),
+      username: decoded.username,
+      userType: decoded.userType,
+    };
+
     next();
   } catch (err) {
-    res.status(401).json({ message: "Unauthorized", err });
+    console.error("Auth error:", err);
+    return res.status(401).json({ message: "Unauthorized" });
   }
 };

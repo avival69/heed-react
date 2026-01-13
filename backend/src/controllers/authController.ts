@@ -3,8 +3,6 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
-
 /* =======================
    REQUEST BODY TYPES
 ======================= */
@@ -31,12 +29,14 @@ interface LoginRequestBody {
 /* =======================
         SIGNUP
 ======================= */
-
 export const signup = async (
   req: Request<{}, {}, SignupRequestBody>,
   res: Response
 ) => {
   try {
+    const JWT_SECRET = process.env.JWT_SECRET!;
+    if (!JWT_SECRET) throw new Error("JWT_SECRET is not defined in .env");
+
     const {
       userType,
       username,
@@ -51,16 +51,13 @@ export const signup = async (
       GST,
     } = req.body;
 
-    // Validate required fields
     if (!userType || !username || !email || !password || !name || !phone) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Normalize email and username
     const normalizedEmail = email.toLowerCase().trim();
     const normalizedUsername = username.toLowerCase().trim();
 
-    // Check if user already exists
     const existingUser = await User.findOne({
       $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
     });
@@ -74,10 +71,8 @@ export const signup = async (
       }
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
     const newUser = new User({
       userType,
       username: normalizedUsername,
@@ -94,9 +89,12 @@ export const signup = async (
 
     await newUser.save();
 
-    // Generate JWT
     const token = jwt.sign(
-      { id: newUser._id },
+      {
+        _id: newUser._id,
+        username: newUser.username,
+        userType: newUser.userType,
+      },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
@@ -115,21 +113,21 @@ export const signup = async (
     });
   } catch (error: any) {
     console.error("SIGNUP BACKEND ERROR:", error);
-    return res.status(500).json({
-      message: error.message || "Server error",
-    });
+    return res.status(500).json({ message: error.message || "Server error" });
   }
 };
 
 /* =======================
           LOGIN
 ======================= */
-
 export const login = async (
   req: Request<{}, {}, LoginRequestBody>,
   res: Response
 ) => {
   try {
+    const JWT_SECRET = process.env.JWT_SECRET!;
+    if (!JWT_SECRET) throw new Error("JWT_SECRET is not defined in .env");
+
     const { emailOrUsername, password } = req.body;
 
     if (!emailOrUsername || !password) {
@@ -144,17 +142,18 @@ export const login = async (
       $or: [{ email: normalized }, { username: normalized }],
     });
 
-    if (!user) {
-      return res.status(400).json({ message: "User not found" });
-    }
+    if (!user) return res.status(400).json({ message: "User not found" });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
+    if (!isMatch)
       return res.status(400).json({ message: "Invalid credentials" });
-    }
 
     const token = jwt.sign(
-      { id: user._id },
+      {
+        _id: user._id,
+        username: user.username,
+        userType: user.userType,
+      },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
@@ -173,8 +172,6 @@ export const login = async (
     });
   } catch (error: any) {
     console.error("LOGIN BACKEND ERROR:", error);
-    return res.status(500).json({
-      message: error.message || "Server error",
-    });
+    return res.status(500).json({ message: error.message || "Server error" });
   }
 };

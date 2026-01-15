@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import ImagePost from "../models/ImagePost.js";
 import { processImage } from "../utils/processImage.js";
 import { AuthRequest } from "../middleware/authMiddleware.js";
-
+//NEED AUTHMIDDLEWARE TO GET REQ.USER NOT NEEDED IN CONTROLLERS/AUTHCONTROLLER.TS
 /* =========================
    CREATE IMAGE POST
 ========================= */

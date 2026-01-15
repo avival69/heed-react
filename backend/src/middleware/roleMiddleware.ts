@@ -16,3 +16,12 @@ export const requireBusiness = (
 
   next();
 };
+/*
+Checks if the request is authenticated
+
+Checks if the authenticated user has userType === "business"
+
+Blocks everyone else
+
+Allows only business users to continue  
+*/

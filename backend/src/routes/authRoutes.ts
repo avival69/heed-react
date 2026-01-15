@@ -1,7 +1,7 @@
 import express from "express";
 import { signup, login } from "../controllers/authController.js";
 
-const router = express.Router();
+const router = express.Router();//create express router
 router.get("/ping", (req, res) => {
   res.status(200).json({
     message: "Backend is reachable 🎯",

@@ -1,4 +1,8 @@
 import AWS from "aws-sdk";
+import { config as dotenvConfig } from "dotenv";
+
+// Ensure dotenv is loaded here (important!)
+dotenvConfig();
 
 const s3 = new AWS.S3({
   endpoint: process.env.CF_ENDPOINT,
@@ -10,9 +14,18 @@ const s3 = new AWS.S3({
 export const uploadFile = async (file: Express.Multer.File) => {
   const params = {
     Bucket: process.env.CF_BUCKET_NAME!,
-    Key: file.originalname,
+    Key: `${Date.now()}-${Math.random()}-${file.originalname}`,
     Body: file.buffer,
     ContentType: file.mimetype,
   };
-  return s3.upload(params).promise();
+
+  console.log("Uploading to Cloudflare with params:", params);
+
+  try {
+    const result = await s3.upload(params).promise();
+    return result;
+  } catch (err) {
+    console.error("Cloudflare Upload Error:", err);
+    throw new Error("Failed to upload file to Cloudflare");
+  }
 };

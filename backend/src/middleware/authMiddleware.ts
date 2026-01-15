@@ -1,29 +1,15 @@
 import { Request, Response, NextFunction } from "express";
-//Express types for middleware fucntions
 import jwt from "jsonwebtoken";
-import User, { IUser } from "../models/User.js";
+import { Types } from "mongoose";
 
-const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
-
-//extends request object to include user property
 export interface AuthRequest extends Request {
   user?: {
-    _id: Types.ObjectId;//_id is of type ObjectId from mongoose
-    username?: string;//optional username
-    userType?: string;//optional userType
+    _id: Types.ObjectId;
+    username?: string;
+    userType?: string;
   };
 }
-//we do this cause after authentication we want to
-//  attach user info to the request object
 
-
-//This is an Express middleware
-
-//req → incoming HTTP request
-
-//res → outgoing response
-
-//next → function to move to the next middleware/controller
 export const requireAuth = (
   req: Request,
   res: Response,
@@ -57,6 +43,7 @@ export const requireAuth = (
 
     next();
   } catch (err) {
-    res.status(401).json({ message: "Unauthorized", err });
+    console.error("Auth error:", err);
+    return res.status(401).json({ message: "Unauthorized" });
   }
 };

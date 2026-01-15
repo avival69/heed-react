@@ -29,4 +29,4 @@ const imagePostSchema = new Schema(
   //automatically adds createdAt and updatedAt fields
 );
 
-export default mongoose.model("ImagePost", imagePostSchema);
+export default mongoose.model<IImagePost>("ImagePost", ImagePostSchema);

@@ -1,7 +1,6 @@
-import mongoose from "mongoose";//mongoose library for MongoDB interaction
-//dotenv only needed in index.ts for config loading (only once needed)
+import mongoose from "mongoose";
 
-export const connectDB = async () => { //Async function to connect to MongoDB
+export const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGO_URI!);
     console.log(`MongoDB Connected: ${conn.connection.host}`);

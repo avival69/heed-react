@@ -12,7 +12,7 @@ import {
   Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AuthContext } from 'src/context/AuthContext';
+import { AuthContext } from 'src/context/AuthContext'; // adjust path
 import { useFocusEffect } from '@react-navigation/native';
 
 /* --------- DUMMY POSTS --------- */
@@ -34,7 +34,7 @@ export default function ProfileScreen({ navigation }: any) {
   const left = posts.filter((_, i) => i % 2 === 0);
   const right = posts.filter((_, i) => i % 2 !== 0);
 
-  /* ---------- AUTO REDIRECT IF LOGGED OUT ---------- */
+  // ----------------- AUTO REDIRECT IF NOT LOGGED IN -----------------
   useFocusEffect(
     React.useCallback(() => {
       if (!user) {
@@ -83,7 +83,7 @@ export default function ProfileScreen({ navigation }: any) {
         {/* ---------- USER INFO ---------- */}
         <View style={styles.info}>
           <Text style={[styles.username, theme.text]}>
-            {user?.username}
+            {user?.username || '@aswin'}
           </Text>
           <Text style={[styles.bio, theme.subText]}>
             {user?.bio || 'Building Heed ✨ | Tech • Design • Startups'}
@@ -170,6 +170,7 @@ export default function ProfileScreen({ navigation }: any) {
           <SidebarItem label="Accounts" />
           <SidebarItem label="Terms & Conditions" />
 
+          {/* DARK MODE */}
           <View style={styles.darkRow}>
             <Text style={[styles.sidebarText, theme.text]}>Dark Mode</Text>
             <Switch value={darkMode} onValueChange={setDarkMode} />
@@ -177,13 +178,14 @@ export default function ProfileScreen({ navigation }: any) {
 
           <View style={styles.divider} />
 
-          {/* ---------- LOGOUT ---------- */}
+          {/* LOGOUT BUTTON */}
           <SidebarItem
             label="Log out"
             danger
             onPress={async () => {
               setMenuOpen(false);
-              await logout(); // 🔥 this alone is enough
+              await logout();
+              navigation.replace('SignIn');
             }}
           />
         </Animated.View>
@@ -194,7 +196,7 @@ export default function ProfileScreen({ navigation }: any) {
 
 /* ---------- SMALL COMPONENTS ---------- */
 
-function Stat({ label, value, theme }: any) {
+function Stat({ label, value, theme }) {
   return (
     <View style={{ alignItems: 'center' }}>
       <Text style={[styles.statValue, theme.text]}>{value}</Text>
@@ -203,7 +205,7 @@ function Stat({ label, value, theme }: any) {
   );
 }
 
-function ActionButton({ title }: any) {
+function ActionButton({ title }) {
   return (
     <TouchableOpacity style={styles.actionBtn}>
       <Text style={styles.actionText}>{title}</Text>
@@ -245,6 +247,7 @@ const dark = {
 
 const styles = StyleSheet.create({
   cover: { width: '100%', height: 160 },
+
   menuBtn: {
     position: 'absolute',
     top: 16,
@@ -254,6 +257,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   menuIcon: { color: '#fff', fontSize: 18, fontWeight: '700' },
+
   avatarWrap: { alignItems: 'center', marginTop: -50 },
   avatar: {
     width: 100,
@@ -262,9 +266,11 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     borderColor: '#fff',
   },
+
   info: { alignItems: 'center', marginTop: 8 },
   username: { fontSize: 18, fontWeight: '700' },
   bio: { marginTop: 4, textAlign: 'center' },
+
   stats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -272,6 +278,7 @@ const styles = StyleSheet.create({
   },
   statValue: { fontWeight: '700', fontSize: 16 },
   statLabel: { fontSize: 12 },
+
   actions: {
     flexDirection: 'row',
     gap: 12,
@@ -287,6 +294,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionText: { color: '#2563eb', fontWeight: '600' },
+
   tabs: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -302,9 +310,12 @@ const styles = StyleSheet.create({
     marginTop: 6,
     borderRadius: 2,
   },
+
   masonry: { flexDirection: 'row', paddingHorizontal: 12, marginTop: 16 },
   card: { borderRadius: 16, marginBottom: 12 },
+
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
+
   sidebar: {
     position: 'absolute',
     right: 0,
@@ -316,6 +327,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderBottomLeftRadius: 24,
   },
+
   sidebarTitle: {
     fontSize: 18,
     fontWeight: '700',
@@ -323,11 +335,13 @@ const styles = StyleSheet.create({
   },
   sidebarItem: { paddingVertical: 14 },
   sidebarText: { fontSize: 16, fontWeight: '500' },
+
   divider: {
     height: 1,
     backgroundColor: '#1e293b',
     marginVertical: 16,
   },
+
   darkRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

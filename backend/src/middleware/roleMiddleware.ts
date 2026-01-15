@@ -1,19 +1,12 @@
-import { Response, NextFunction } from "express";
-import { AuthRequest } from "./authMiddleware.js"; // or types.ts
+import { Request, Response, NextFunction } from "express";
+import { IUser } from "../models/User.js";
 
-export const requireBusiness = (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-) => {
-  if (!req.user) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
+interface AuthRequest extends Request {
+  user?: IUser;
+}
 
-  if (req.user.userType !== "business") {
-    return res.status(403).json({ message: "Access denied" });
-  }
-
+export const requireBusiness = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (req.user?.userType !== "business") return res.status(403).json({ message: "Access denied" });
   next();
 };
 /*

@@ -7,9 +7,7 @@
     "strict": true,
     "outDir": "dist",
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-
-    "typeRoots": ["./src/types", "./node_modules/@types"]
+    "skipLibCheck": true
   },
   "include": ["src/**/*", "testR2.ts"],
   "exclude": ["node_modules", "dist"]

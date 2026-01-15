@@ -1,9 +1,8 @@
 import { Router } from "express";
 import { createImagePost, toggleLikePost } from "../controllers/imagePostController.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
-import { upload } from "../middleware/upload.js"; // your Multer config
 
-const router = Router();
+const router = express.Router();
 
 router.post(
   "/create",

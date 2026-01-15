@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 //Express types for middleware fucntions
 import jwt from "jsonwebtoken";
-import { Types } from "mongoose";
+import User, { IUser } from "../models/User.js";
+
+const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
 
 //extends request object to include user property
 export interface AuthRequest extends Request {
@@ -55,7 +57,6 @@ export const requireAuth = (
 
     next();
   } catch (err) {
-    console.error("Auth error:", err);
-    return res.status(401).json({ message: "Unauthorized" });
+    res.status(401).json({ message: "Unauthorized", err });
   }
 };

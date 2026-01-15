@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useContext } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,10 +15,7 @@ import { useNavigation, useRoute, useIsFocused } from '@react-navigation/native'
 import { ArrowLeft, Plus, X } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 
-import { createImagePostApi } from 'src/api/imagePost';
-import { AuthContext } from 'src/context/AuthContext';
-
-/* ---------------- GALLERY HELPER ---------------- */
+// --- HELPER: Gallery Logic ---
 async function openGallery(max = 1): Promise<string[] | null> {
   const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (status !== 'granted') {
@@ -29,7 +26,7 @@ async function openGallery(max = 1): Promise<string[] | null> {
   const res = await ImagePicker.launchImageLibraryAsync({
     allowsMultipleSelection: true,
     selectionLimit: max,
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    mediaTypes: 'images',
     quality: 1,
   });
 
@@ -37,36 +34,42 @@ async function openGallery(max = 1): Promise<string[] | null> {
   return res.assets.map((a) => a.uri);
 }
 
-/* ---------------- CONSTANTS ---------------- */
+// --- CONSTANTS ---
 const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const ITEM_WIDTH = width * 0.75;
-const SPACING = 10;
-const EMPTY_ITEM_SIZE = (width - ITEM_WIDTH) / 2;
+const ITEM_WIDTH = width * 0.75; 
+const SPACING = 10; 
+const EMPTY_ITEM_SIZE = (width - ITEM_WIDTH) / 2; 
 
 export default function CreateScreen() {
   const nav = useNavigation<any>();
   const route = useRoute<any>();
   const isFocused = useIsFocused();
 
-  const { token } = useContext(AuthContext);
-
-  /* ---------------- IMAGE STATE ---------------- */
+  // 1. Initialize Images (Fill up to 4 slots)
   const [images, setImages] = useState<(string | null)[]>([]);
 
+  // Initial Load
   useEffect(() => {
+    // Prevent overwriting if we already have images in state
     if (images.length > 0) return;
 
     const paramsImages = route.params?.images || [];
+    
+    // Guard: Page should not load unless there is at least one image
     if (paramsImages.length === 0) {
       nav.goBack();
       return;
     }
 
+    // Fill remaining slots with null to total 4
     const initial = [...paramsImages];
-    while (initial.length < 4) initial.push(null);
+    while (initial.length < 4) {
+      initial.push(null);
+    }
     setImages(initial);
   }, [route.params?.images]);
 
+  // Handle Edit Return
   useEffect(() => {
     if (isFocused && route.params?.updatedImage) {
       const { index, uri } = route.params.updatedImage;
@@ -79,7 +82,7 @@ export default function CreateScreen() {
     }
   }, [isFocused, route.params?.updatedImage]);
 
-  /* ---------------- ANIMATIONS ---------------- */
+  /* ---------------- ANIMATION STATE ---------------- */
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
 
@@ -110,88 +113,46 @@ export default function CreateScreen() {
     setTagInput('');
   };
 
-  /* ---------------- IMAGE HANDLERS ---------------- */
   const handleAddImage = async (index: number) => {
     const newImgs = await openGallery(1);
-    if (!newImgs) return;
-
-    setImages((prev) => {
-      const copy = [...prev];
-      copy[index] = newImgs[0];
-      return copy;
-    });
+    if (newImgs && newImgs.length > 0) {
+      setImages((prev) => {
+        const copy = [...prev];
+        copy[index] = newImgs[0];
+        return copy;
+      });
+    }
   };
 
   const handleEditImage = (uri: string, index: number) => {
     nav.navigate('EditImage', { uri, index });
   };
 
-  const handleRemoveImage = (index: number) => {
+  // --- NEW: Remove Image Logic ---
+  const handleRemoveImage = (indexToRemove: number) => {
     setImages((prev) => {
-      const filtered = prev.filter((_, i) => i !== index);
+      // 1. Remove the item at index
+      const filtered = prev.filter((_, i) => i !== indexToRemove);
+      
+      // 2. Add a null at the end to ensure we still have 4 slots
       filtered.push(null);
-
-      if (filtered.every((i) => i === null)) nav.goBack();
+      
+      // 3. If all images are gone, go back (optional safety)
+      if (filtered.every(img => img === null)) {
+        nav.goBack();
+      }
+      
       return filtered;
     });
   };
 
-  /* ---------------- PUBLISH ---------------- */
   const canPublish =
-    title.trim() &&
-    description.trim() &&
-    images.filter(Boolean).length > 0;
-const handlePublish = async () => {
-  if (!canPublish) return;
-
-  try {
-    const form = new FormData();
-
-    images
-      .filter(Boolean)
-      .forEach((uri: any, index) => {
-        form.append('images', {
-          uri,
-          name: `image-${index}.jpg`,
-          type: 'image/jpeg',
-        } as any);
-      });
-
-    form.append('title', title);
-    form.append('description', description);
-    if (price) form.append('price', price);
-    form.append('allowComments', String(allowComments));
-
-    console.log('Uploading FormData...');
-    await createImagePostApi(form, token);
-
-    Alert.alert('Success', 'Post created successfully');
-    nav.goBack();
-  }catch (err: any) {
-    // Extract the exact backend error message
-    let message = 'Failed to upload post';
-
-    if (err.response?.data?.message) {
-      // Most APIs return { message: '...' }
-      message = err.response.data.message;
-    } else if (err.response?.data) {
-      // If API returns some object, stringify it
-      message = JSON.stringify(err.response.data);
-    } else if (err.message) {
-      // Axios/network error
-      message = err.message;
-    }
-
-    console.log('Upload error:', err);
-    Alert.alert('Error', message);
-  };
-};
-
+    title.trim() && description.trim() && images.filter(Boolean).length > 0;
 
   /* ---------------- RENDER ---------------- */
   return (
     <View style={styles.container}>
-      {/* HEADER */}
+      {/* NAV HEADER */}
       <Animated.View
         style={[styles.nav, { transform: [{ translateY: headerTranslate }] }]}
       >
@@ -204,12 +165,13 @@ const handlePublish = async () => {
       <Animated.ScrollView
         contentContainerStyle={{ paddingTop: 100, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
       >
-        {/* IMAGE CAROUSEL */}
+        {/* CAROUSEL SECTION */}
         <Animated.View style={{ height: carouselHeight }}>
           <Animated.ScrollView
             horizontal
@@ -218,50 +180,87 @@ const handlePublish = async () => {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{
               paddingHorizontal: EMPTY_ITEM_SIZE,
-              alignItems: 'center',
+              alignItems: 'center', 
             }}
             onScroll={Animated.event(
               [{ nativeEvent: { contentOffset: { x: scrollX } } }],
               { useNativeDriver: true }
             )}
+            scrollEventThrottle={16}
           >
-            {images.map((uri, index) => (
-              <View key={index} style={styles.cardContainer}>
-                <TouchableOpacity
-                  style={styles.cardInner}
-                  onPress={() => !uri && handleAddImage(index)}
-                  onLongPress={() => uri && handleEditImage(uri, index)}
+            {images.map((uri, index) => {
+              const inputRange = [
+                (index - 1) * ITEM_WIDTH,
+                index * ITEM_WIDTH,
+                (index + 1) * ITEM_WIDTH,
+              ];
+
+              const scale = scrollX.interpolate({
+                inputRange,
+                outputRange: [0.9, 1, 0.9],
+                extrapolate: 'clamp',
+              });
+
+              const opacity = scrollX.interpolate({
+                inputRange,
+                outputRange: [0.6, 1, 0.6],
+                extrapolate: 'clamp',
+              });
+
+              return (
+                <Animated.View
+                  key={index}
+                  style={[
+                    styles.cardContainer,
+                    { transform: [{ scale }], opacity },
+                  ]}
                 >
-                  {uri ? (
-                    <>
-                      <Image source={{ uri }} style={styles.image} />
-                      {index === 0 && (
-                        <View style={styles.coverBadge}>
-                          <Text style={styles.coverText}>Cover</Text>
-                        </View>
-                      )}
-                      <TouchableOpacity
-                        style={styles.deleteBtn}
-                        onPress={() => handleRemoveImage(index)}
-                      >
-                        <X size={14} color="#fff" />
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <View style={styles.placeholder}>
-                      <Plus size={32} color="#9ca3af" />
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-            ))}
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    delayLongPress={200}
+                    onPress={() => !uri && handleAddImage(index)}
+                    onLongPress={() => uri && handleEditImage(uri, index)}
+                    style={styles.cardInner}
+                  >
+                    {uri ? (
+                      <>
+                        <Image source={{ uri }} style={styles.image} />
+                        
+                        {/* 1. COVER BADGE (Index 0) */}
+                        {index === 0 && (
+                          <View style={styles.coverBadge}>
+                            <Text style={styles.coverText}>Cover</Text>
+                          </View>
+                        )}
+
+                        {/* 2. DELETE BUTTON (X) */}
+                        <TouchableOpacity 
+                          style={styles.deleteBtn}
+                          onPress={() => handleRemoveImage(index)}
+                        >
+                          <X size={14} color="#fff" />
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <View style={styles.placeholder}>
+                        <Plus size={32} color="#9ca3af" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            })}
           </Animated.ScrollView>
         </Animated.View>
 
-        {/* FORM */}
+        {/* INPUT FORM */}
         <View style={styles.form}>
           <Text style={styles.label}>Title</Text>
-          <TextInput value={title} onChangeText={setTitle} style={styles.input} />
+          <TextInput
+            value={title}
+            onChangeText={setTitle}
+            style={styles.input}
+          />
 
           <Text style={styles.label}>Description</Text>
           <TextInput
@@ -280,6 +279,25 @@ const handlePublish = async () => {
             style={styles.input}
           />
 
+          <Text style={styles.label}>Tags</Text>
+          <View style={[styles.input, styles.tagWrap]}>
+            {tags.map((t, i) => (
+              <View key={i} style={styles.tag}>
+                <Text>{t}</Text>
+                <Text onPress={() => setTags(tags.filter((_, x) => x !== i))}>
+                  ×
+                </Text>
+              </View>
+            ))}
+            <TextInput
+              value={tagInput}
+              onChangeText={setTagInput}
+              onSubmitEditing={addTag}
+              style={{ flex: 1, minWidth: 60 }}
+              placeholder="Cars..."
+            />
+          </View>
+
           <Text style={styles.section}>Engagement</Text>
 
           <View style={styles.row}>
@@ -295,7 +313,6 @@ const handlePublish = async () => {
           <TouchableOpacity
             disabled={!canPublish}
             style={[styles.publish, !canPublish && { opacity: 0.4 }]}
-            onPress={handlePublish}
           >
             <Text style={styles.publishText}>Publish</Text>
           </TouchableOpacity>
@@ -308,6 +325,7 @@ const handlePublish = async () => {
 /* ---------------- STYLES ---------------- */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
+
   nav: {
     position: 'absolute',
     top: 0,
@@ -324,16 +342,35 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f3f4f6',
   },
   navTitle: { fontSize: 16, color: '#9ca3af', fontWeight: '600' },
-  cardContainer: { width: ITEM_WIDTH, height: '100%', alignItems: 'center' },
+
+  // Carousel Styles
+  cardContainer: {
+    width: ITEM_WIDTH,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   cardInner: {
     width: ITEM_WIDTH - SPACING,
     height: '90%',
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#e5e7eb',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
   },
   image: { width: '100%', height: '100%', resizeMode: 'cover' },
-  placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  placeholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f3f4f6',
+  },
+
+  // NEW UX BADGES
   coverBadge: {
     position: 'absolute',
     top: 10,
@@ -343,7 +380,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
   },
-  coverText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  coverText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   deleteBtn: {
     position: 'absolute',
     top: 10,
@@ -355,20 +396,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  // Form Styles
   form: { paddingHorizontal: 20 },
-  label: { marginTop: 20, marginBottom: 6, fontWeight: '600' },
+  label: { marginTop: 20, marginBottom: 6, fontWeight: '600', fontSize: 14 },
   input: {
     borderWidth: 1,
     borderColor: '#e5e7eb',
     borderRadius: 8,
     padding: 12,
+    fontSize: 15,
     backgroundColor: '#f9fafb',
   },
-  textArea: { height: 80 },
-  section: { marginTop: 30, marginBottom: 15, fontWeight: '700' },
+  textArea: { height: 80, textAlignVertical: 'top' },
+  tagWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tag: {
+    flexDirection: 'row',
+    gap: 4,
+    backgroundColor: '#e5e7eb',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  section: { marginTop: 30, marginBottom: 15, fontWeight: '700', fontSize: 16 },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 20,
   },
   publish: {
@@ -377,6 +437,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 20,
+    marginBottom: 50,
   },
   publishText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

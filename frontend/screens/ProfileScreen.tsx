@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
+import {  fetchMyPostsApi  } from 'src/api/imagePost';
+
 import {
   View,
   Text,
@@ -16,23 +18,21 @@ import { AuthContext } from 'src/context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
 
 /* --------- DUMMY POSTS --------- */
-const posts = Array.from({ length: 12 }).map((_, i) => ({
-  id: i,
-  height: i % 2 === 0 ? 180 : 260,
-  color: `hsl(${i * 35}, 70%, 85%)`,
-}));
+
 
 export default function ProfileScreen({ navigation }: any) {
+
   const { user, logout } = useContext(AuthContext);
 
   const [activeTab, setActiveTab] = useState('Posts');
+    const [myPosts, setMyPosts] = useState<any[]>([]);
+const [loadingPosts, setLoadingPosts] = useState<boolean>(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
   const slideAnim = useRef(new Animated.Value(260)).current;
 
-  const left = posts.filter((_, i) => i % 2 === 0);
-  const right = posts.filter((_, i) => i % 2 !== 0);
+
 
   /* ---------- AUTO REDIRECT IF LOGGED OUT ---------- */
   useFocusEffect(
@@ -50,6 +50,30 @@ export default function ProfileScreen({ navigation }: any) {
       useNativeDriver: true,
     }).start();
   }, [menuOpen]);
+
+useEffect(() => {
+  if (!user?.token) return; // Make sure we have the token
+
+  const fetchMyPosts = async () => {
+    try {
+      setLoadingPosts(true);
+
+      const posts = await fetchMyPostsApi(user.token); // fetch only your posts
+      console.log('Fetched my posts:', posts);
+      const flattened = posts.flat();
+      setMyPosts(flattened);
+
+    } catch (err) {
+      console.log('❌ Failed to fetch my posts', err);
+    } finally {
+      setLoadingPosts(false);
+    }
+  };
+
+  fetchMyPosts();
+}, [user]);
+
+
 
   const theme = darkMode ? dark : light;
 
@@ -126,32 +150,63 @@ export default function ProfileScreen({ navigation }: any) {
         </View>
 
         {/* ---------- MASONRY ---------- */}
-        {activeTab === 'Posts' && (
-          <View style={styles.masonry}>
-            <View style={{ flex: 1, marginRight: 6 }}>
-              {left.map((item) => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.card,
-                    { height: item.height, backgroundColor: item.color },
-                  ]}
-                />
-              ))}
-            </View>
-            <View style={{ flex: 1, marginLeft: 6 }}>
-              {right.map((item) => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.card,
-                    { height: item.height, backgroundColor: item.color },
-                  ]}
-                />
-              ))}
-            </View>
-          </View>
-        )}
+{/* ---------- MASONRY ---------- */}
+{activeTab === 'Posts' && (
+  <View style={styles.masonry}>
+    {/* LEFT COLUMN */}
+    <View style={{ flex: 1, marginRight: 6 }}>
+      {myPosts
+        .filter((_, i) => i % 2 === 0)
+        .map((post: any) => {
+          const image = post.low;
+          if (!image) return null;
+
+          return (
+            <TouchableOpacity
+              key={post._id}
+              style={styles.card}
+              activeOpacity={0.9}
+              onPress={() =>
+                navigation.navigate('ItemScreen', { post })
+              }
+            >
+              <Image
+                source={{ uri: image }}
+                style={styles.postImage}
+              />
+            </TouchableOpacity>
+          );
+        })}
+    </View>
+
+    {/* RIGHT COLUMN */}
+    <View style={{ flex: 1, marginLeft: 6 }}>
+      {myPosts
+        .filter((_, i) => i % 2 !== 0)
+        .map((post: any) => {
+          const image = post.low;
+          if (!image) return null;
+
+          return (
+            <TouchableOpacity
+              key={post._id}
+              style={styles.card}
+              activeOpacity={0.9}
+              onPress={() =>
+                navigation.navigate('ItemScreen', { post })
+              }
+            >
+              <Image
+                source={{ uri: image }}
+                style={styles.postImage}
+              />
+            </TouchableOpacity>
+          );
+        })}
+    </View>
+  </View>
+)}
+
       </ScrollView>
 
       {/* ---------- SIDEBAR ---------- */}
@@ -334,4 +389,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
   },
+  postImage: {
+  width: '100%',
+  height: 220,
+  borderRadius: 16,
+  resizeMode: 'cover',
+},
 });

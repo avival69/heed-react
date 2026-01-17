@@ -13,10 +13,15 @@ const imagePostSchema = new Schema(
     user: { type: Schema.Types.ObjectId, ref: "User", required: true },
     title: { type: String, required: true },
     description: { type: String, required: true },
-    price: { type: Number },
+    price: { type: Number , min: 0},
     allowComments: { type: Boolean, default: true },
+        allowLikes: {
+      type: Boolean,
+      default: true,
+    },
     images: { type: [imageSchema], required: true },
-    likes: { type: Number, default: 0 },
+
+    // ✅ SINGLE SOURCE OF TRUTH
     likedBy: [{ type: Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true }

@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
+import {  fetchMyPostsApi  } from 'src/api/imagePost';
+
 import {
   View,
   Text,
@@ -17,23 +19,44 @@ import { useFocusEffect } from '@react-navigation/native';
 import { MapPin } from 'lucide-react-native'; // Optional: for location icon
 
 /* --------- DUMMY POSTS --------- */
-const posts = Array.from({ length: 12 }).map((_, i) => ({
-  id: i,
-  height: i % 2 === 0 ? 180 : 260,
-  color: `hsl(${i * 35}, 70%, 85%)`,
-}));
+
 
 export default function ProfileScreen({ navigation }: any) {
-  const { user, logout } = useContext(AuthContext);
+  const getCloudflareImageUrl = (imgObj: { low?: string; high?: string }) => {
+  if (!imgObj) return undefined;
+
+  // Use low first, fallback to high
+  let url = imgObj.low || imgObj.high;
+  if (!url) return undefined;
+
+  // If URL already points to your public R2, just return it
+  if (url.includes('pub-52a7337cc0c34226bcd23333580143ba.r2.dev')) return url;
+
+  // If URL includes Cloudflare's storage URL, convert to your public R2 URL
+  if (url.includes('r2.cloudflarestorage.com')) {
+    const filename = url.split('/').pop(); // get just the file name
+    return `https://pub-52a7337cc0c34226bcd23333580143ba.r2.dev/${filename}`;
+  }
+
+  // Otherwise return original URL
+  return url;
+};
+
+
+const { user, token, logout } = useContext(AuthContext);
+    console.log('User:', user);
+console.log('Token:', token);
+
 
   const [activeTab, setActiveTab] = useState('Posts');
+    const [myPosts, setMyPosts] = useState<any[]>([]);
+const [loadingPosts, setLoadingPosts] = useState<boolean>(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
   const slideAnim = useRef(new Animated.Value(260)).current;
 
-  const left = posts.filter((_, i) => i % 2 === 0);
-  const right = posts.filter((_, i) => i % 2 !== 0);
+
 
   /* ---------- AUTO REDIRECT IF LOGGED OUT ---------- */
   useFocusEffect(
@@ -51,6 +74,40 @@ export default function ProfileScreen({ navigation }: any) {
       useNativeDriver: true,
     }).start();
   }, [menuOpen]);
+
+
+useFocusEffect(
+  React.useCallback(() => {
+    if (!user || !token) return; // Make sure both exist
+
+    const fetchMyPosts = async () => {
+      try {
+        setLoadingPosts(true);
+        console.log('⏳ Fetching posts for user:', user.username, user._id);
+
+        const posts = await fetchMyPostsApi(token); // use token here
+
+
+        const flattened = posts.flat(1);
+        console.log('Flattened posts:', flattened);
+
+        setMyPosts(flattened);
+            if (flattened.length > 0) {
+      console.log('First post images:', JSON.stringify(flattened[0]?.images, null, 2));
+    }
+      } catch (err) {
+        console.log('❌ Failed to fetch my posts', err);
+      } finally {
+        setLoadingPosts(false);
+        console.log('✅ Finished fetching posts');
+      }
+    };
+
+    fetchMyPosts();
+  }, [user, token])
+);
+
+
 
   const theme = darkMode ? dark : light;
 
@@ -152,32 +209,61 @@ export default function ProfileScreen({ navigation }: any) {
         </View>
 
         {/* ---------- MASONRY ---------- */}
-        {activeTab === 'Posts' && (
-          <View style={styles.masonry}>
-            <View style={{ flex: 1, marginRight: 6 }}>
-              {left.map((item) => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.card,
-                    { height: item.height, backgroundColor: item.color },
-                  ]}
-                />
-              ))}
-            </View>
-            <View style={{ flex: 1, marginLeft: 6 }}>
-              {right.map((item) => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.card,
-                    { height: item.height, backgroundColor: item.color },
-                  ]}
-                />
-              ))}
-            </View>
-          </View>
-        )}
+{/* ---------- MASONRY ---------- */}
+{/* ---------- MASONRY GRID ---------- */}
+{activeTab === 'Posts' && (
+  <View style={{ flexDirection: 'row', padding: 12, gap: 12 }}>
+    {/* LEFT COLUMN */}
+    <View style={{ flex: 1, gap: 12 }}>
+      {myPosts
+        .filter((_, i) => i % 2 === 0) // even index → left column
+        .map((post) => (
+          <TouchableOpacity
+            key={post._id}
+            onPress={() =>
+              navigation.navigate('Item', {post
+              })
+            }
+            style={{ marginBottom: 12, alignItems: 'center' }}
+          >
+            <Image
+              source={{ uri: getCloudflareImageUrl(post.images?.[0]) }}
+              style={{ width: '100%', borderRadius: 12, aspectRatio: 1 }}
+            />
+            <Text style={{ marginTop: 4, fontWeight: '600' }}>
+              {post.title || post._id}
+            </Text>
+          </TouchableOpacity>
+        ))}
+    </View>
+
+    {/* RIGHT COLUMN */}
+    <View style={{ flex: 1, gap: 12 }}>
+      {myPosts
+        .filter((_, i) => i % 2 !== 0) // odd index → right column
+        .map((post) => (
+          <TouchableOpacity
+            key={post._id}
+onPress={() => navigation.navigate('Item', { post})}
+            style={{ marginBottom: 12, alignItems: 'center' }}
+          >
+            <Image
+              source={{ uri: getCloudflareImageUrl(post.images?.[0]) }}
+              style={{ width: '100%', borderRadius: 12, aspectRatio: 1 }}
+            />
+            <Text style={{ marginTop: 4, fontWeight: '600' }}>
+              {post.title || post._id}
+            </Text>
+          </TouchableOpacity>
+        ))}
+    </View>
+  </View>
+)}
+
+
+
+
+
       </ScrollView>
 
       {/* ---------- SIDEBAR ---------- */}
@@ -360,4 +446,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
   },
+  postImage: {
+  width: '100%',
+  height: 220,
+  borderRadius: 16,
+  resizeMode: 'cover',
+},
 });

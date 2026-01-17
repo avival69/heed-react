@@ -1,4 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState ,useContext } from 'react';
+import { useRoute } from '@react-navigation/native';
+import { useEffect } from 'react';
+import { Alert } from 'react-native';
+import { toggleLikePostApi } from 'src/api/imagePost';
+import { AuthContext } from 'src/context/AuthContext';
+
+// Get the logged-in user's token
+const R2_BASE_URL = "https://pub-52a7337cc0c34226bcd23333580143ba.r2.dev";
 import {
   View,
   Text,
@@ -25,7 +33,10 @@ import {
 import CommentsSheet from '../screens/components/CommentsSheet'; 
 
 const { width } = Dimensions.get('window');
-
+type PostImage = {
+  high: string;
+  low: string;
+};
 /* ---------- DUMMY DATA ---------- */
 const RELATED_ITEMS = Array.from({ length: 6 }).map((_, i) => ({
   id: i,
@@ -37,10 +48,79 @@ const RELATED_ITEMS = Array.from({ length: 6 }).map((_, i) => ({
 
 export default function ItemScreen() {
   const navigation = useNavigation<any>();
-  
+  const [activeIndex, setActiveIndex] = useState(0);
+const [enableVerticalScroll, setEnableVerticalScroll] = useState(true);
+  const route = useRoute<any>();
+const post = route.params?.post; // <-- 
+const likesEnabled = post?.allowLikes !== false;
+const commentsEnabled = post?.allowComments !== false;
+useEffect(() => {
+  if (!post?.images || post.images.length === 0) return;
+
+  post.images.forEach(async (img:PostImage, idx:number) => {
+    try {
+      const res = await fetch(img.high);
+      console.log(`Image ${idx} fetch status:`, res.status);
+      if (!res.ok) console.log(`Image ${idx} failed to load`, res.statusText);
+    } catch (err: any) {
+      console.log(`Image ${idx} fetch error:`, err.message);
+    }
+  });
+}, [post]);
+
   // State
-  const [isLiked, setIsLiked] = useState(false);
+
+   const { token, user } = useContext(AuthContext);
+const [likeCount, setLikeCount] = useState(post?.likedBy?.length || 0);
+const [isLiked, setIsLiked] = useState(
+  post?.likedBy?.some((id: string) => id === user?._id) || false
+);
   const [showComments, setShowComments] = useState(false);
+  console.log('token:', token, 'user:', user);
+
+const handleToggleLike = async (): Promise<void> => {
+  console.log('💡 handleToggleLike triggered');
+  console.log('🧪 post:', post);
+
+  if (!post?._id) {
+    console.log('❌ No post._id');
+    return;
+  }
+
+  if (!token) {
+    console.log('❌ No token');
+    return;
+  }
+
+  const newLiked: boolean = !isLiked;
+
+  console.log('🔹 current isLiked:', isLiked);
+  console.log('🔹 new isLiked:', newLiked);
+  console.log('🔹 post._id:', post._id);
+
+  // ✅ Optimistic UI update
+  setIsLiked(newLiked);
+  setLikeCount((prev: number): number => prev + (newLiked ? 1 : -1));
+
+  try {
+    await toggleLikePostApi(post._id, token);
+    console.log('✅ Like API success');
+  } catch (err: unknown) {
+    const error =
+      err instanceof Error ? err.message : 'Unknown error';
+
+    console.log('❌ Like API failed:', error);
+
+    // rollback
+    setIsLiked(!newLiked);
+    setLikeCount((prev: number): number => prev + (newLiked ? -1 : 1));
+
+    Alert.alert('Error', 'Could not update like');
+  }
+};
+
+
+
 
   return (
     <View style={styles.container}>
@@ -51,94 +131,161 @@ export default function ItemScreen() {
       />
 
       <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        bounces={false}
+  showsVerticalScrollIndicator={false}
+  contentContainerStyle={{ paddingBottom: 100 }}
+  bounces={false}
+  nestedScrollEnabled={true}
+  scrollEnabled={enableVerticalScroll}   
       >
         {/* ---------- HERO IMAGE SECTION ---------- */}
-        <View style={styles.imageContainer}>
-          <Image
-            source={{
-              uri: 'https://images.unsplash.com/photo-1520975916090-3105956dac38?auto=format&fit=crop&w=800&q=80',
-            }}
-            style={styles.image}
-            resizeMode="cover"
-          />
-          
-          <View style={styles.imageOverlay} />
+{/* ---------- HERO IMAGE SECTION ---------- */}
+{/* ---------- HERO IMAGE SECTION ---------- */}
+<View style={{ width: width, height: 500 }}>
+  {post?.images?.length > 0 && (
+    <ScrollView
+      horizontal
+      pagingEnabled
+      showsHorizontalScrollIndicator={false}
+      scrollEventThrottle={16}
+      onMomentumScrollEnd={(e) => {
+        const index = Math.round(e.nativeEvent.contentOffset.x / width);
+        setActiveIndex(index);
+      }}
+      style={{ width: width, height: 500 }}
+    >
+{post.images.map((img: PostImage, idx: number) => {
+  // ✅ Convert raw R2 URL to public base URL
+  const coverImageUrl = (() => {
+    if (!img?.high) return undefined;
+    const filename = img.high.split("/").pop(); // extract just filename
+    if (!filename) return undefined;
+    return `${R2_BASE_URL}/${filename}`;
+  })();
 
-          {/* Floating Header Actions */}
-          <SafeAreaView style={styles.headerSafe} edges={['top']}>
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.glassButton}
-                onPress={() => navigation.goBack()}
-              >
-                <ArrowLeft size={22} color="#fff" />
-              </TouchableOpacity>
+  return (
+    <Image
+      key={idx}
+      source={{ uri: coverImageUrl }}
+      style={{ width: width, height: 500 }}
+      resizeMode="cover"
+    />
+  );
+})}
 
-              <TouchableOpacity style={styles.glassButton}>
-                <Share2 size={20} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-        </View>
+    </ScrollView>
+  )}
 
-        {/* ---------- MAIN CONTENT CARD ---------- */}
+  {/* Dots */}
+  {post?.images?.length > 1 && (
+    <View style={styles.dotsContainer}>
+      {post.images.map((_: PostImage, i: number) => (
+        <View
+          key={i}
+          style={[styles.dot, activeIndex === i && styles.activeDot]}
+        />
+      ))}
+    </View>
+  )}
+
+  <View style={styles.imageOverlay} pointerEvents="none" />
+
+  {/* Floating Header */}
+  <SafeAreaView style={styles.headerSafe} edges={['top']}>
+    <View style={styles.headerActions}>
+      <TouchableOpacity
+        style={styles.glassButton}
+        onPress={() => navigation.goBack()}
+      >
+        <ArrowLeft size={22} color="#fff" />
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.glassButton}>
+        <Share2 size={20} color="#fff" />
+      </TouchableOpacity>
+    </View>
+  </SafeAreaView>
+  </View>
+          {/* ---------- MAIN CONTENT CARD ---------- */}
         <View style={styles.card}>
           {/* Handle Bar Visual */}
           <View style={styles.handleBar} />
 
           {/* Seller & Meta Info */}
-          <View style={styles.metaRow}>
-            <View style={styles.sellerContainer}>
-              <Image 
-                source={{ uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80' }} 
-                style={styles.avatar} 
-              />
-              <View>
-                <Text style={styles.sellerName}>Studio SDK</Text>
-                <View style={styles.ratingRow}>
-                  <Star size={12} color="#F59E0B" fill="#F59E0B" />
-                  <Text style={styles.sellerRating}>4.9 • Verified</Text>
-                </View>
-              </View>
-            </View>
-            <Text style={styles.price}>₹2,000</Text>
-          </View>
+         {/* Seller & Meta Info */}
+<View style={styles.metaRow}>
+  <View style={styles.sellerContainer}>
+    <Image 
+      source={{ uri: post?.user?.avatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80' }} 
+      style={styles.avatar} 
+    />
+    <View>
+      <Text style={styles.sellerName}>
+        {post?.user?.username || 'Unknown'}
+      </Text>
+      <View style={styles.ratingRow}>
+        <Star size={12} color="#F59E0B" fill="#F59E0B" />
+        <Text style={styles.sellerRating}>4.9 • Verified</Text> {/* dummy */}
+      </View>
+    </View>
+  </View>
+  <Text style={styles.price}>
+    {post?.price ? `₹${post.price.toString()}` : ''}
+  </Text>
+</View>
 
-          {/* Product Details */}
-          <Text style={styles.title}>Polka Dot Halter Midi</Text>
-          <Text style={styles.description}>
-            A classic silhouette with a modern neckline. Designed for comfort
-            and elegance using premium sustainable cotton. Perfect for summer evenings.
-          </Text>
+{/* Product Details */}
+<Text style={styles.title}>
+  {post?.title || 'No Title'}
+</Text>
+<Text style={styles.description}>
+  {post?.description || 'No description available.'}
+</Text>
 
           {/* ---------- INTERACTION BAR ---------- */}
           <View style={styles.interactionRow}>
-            <View style={styles.socialActions}>
-              <TouchableOpacity 
-                onPress={() => setIsLiked(!isLiked)} 
-                style={styles.iconBtn}
-                activeOpacity={0.7}
-              >
-                <Heart
-                  size={26}
-                  color={isLiked ? '#ef4444' : '#1f2937'}
-                  fill={isLiked ? '#ef4444' : 'transparent'}
-                />
-                <Text style={styles.iconText}>1.2K</Text>
-              </TouchableOpacity>
+           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 24 }}>
+  {/* LIKE BUTTON */}
+  <TouchableOpacity
+    onPress={likesEnabled ? handleToggleLike : undefined}
+    activeOpacity={likesEnabled ? 0.7 : 1}
+    disabled={!likesEnabled}
+    style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+  >
+    <Heart
+      size={26}
+      color={likesEnabled
+        ? isLiked
+          ? '#ef4444'
+          : '#1f2937'
+        : '#9CA3AF'}
+      fill={likesEnabled && isLiked ? '#ef4444' : 'transparent'}
+    />
+    {likesEnabled && (
+      <Text style={{ fontSize: 16, fontWeight: '600', color: '#374151' }}>
+        {likeCount}
+      </Text>
+    )}
+  </TouchableOpacity>
 
-              <TouchableOpacity 
-                onPress={() => setShowComments(true)} 
-                style={styles.iconBtn}
-                activeOpacity={0.7}
-              >
-                <MessageCircle size={26} color="#1f2937" />
-                <Text style={styles.iconText}>100</Text>
-              </TouchableOpacity>
-            </View>
+  {/* COMMENT BUTTON */}
+  <TouchableOpacity
+    onPress={commentsEnabled ? () => setShowComments(true) : undefined}
+    activeOpacity={commentsEnabled ? 0.7 : 1}
+    disabled={!commentsEnabled}
+    style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+  >
+    <MessageCircle
+      size={26}
+      color={commentsEnabled ? '#1f2937' : '#9CA3AF'}
+    />
+    {commentsEnabled && (
+      <Text style={{ fontSize: 16, fontWeight: '600', color: '#374151' }}>
+        100
+      </Text>
+    )}
+  </TouchableOpacity>
+</View>
+
 
             {/* Repost / Tuck-in Button */}
             <TouchableOpacity style={styles.tuckInButton} activeOpacity={0.8}>
@@ -240,7 +387,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
-    backdropFilter: 'blur(10px)', // Works on some versions/web, falls back gracefully
+    // Works on some versions/web, falls back gracefully
   },
 
   // CARD CONTENT
@@ -418,4 +565,38 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
+  dotsContainer: {
+  position: 'absolute',
+  bottom: 20,
+  alignSelf: 'center',
+  flexDirection: 'row',
+  gap: 6,
+  zIndex: 5,
+},
+
+dot: {
+  width: 6,
+  height: 6,
+  borderRadius: 3,
+  backgroundColor: 'rgba(255,255,255,0.4)',
+},
+actionBtn: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+  padding: 6,
+},
+
+actionText: {
+  fontSize: 16,
+  fontWeight: '600',
+  color: '#374151',
+},
+
+activeDot: {
+  backgroundColor: '#fff',
+  width: 8,
+  height: 8,
+  borderRadius: 4,
+},
 });

@@ -52,20 +52,9 @@ export default function CreateScreen() {
 
   /* ---------------- IMAGE STATE ---------------- */
   const [images, setImages] = useState<(string | null)[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (images.length > 0) return;
 
-    const paramsImages = route.params?.images || [];
-    if (paramsImages.length === 0) {
-      nav.goBack();
-      return;
-    }
-
-    const initial = [...paramsImages];
-    while (initial.length < 4) initial.push(null);
-    setImages(initial);
-  }, [route.params?.images]);
 
   useEffect(() => {
     if (isFocused && route.params?.updatedImage) {
@@ -79,6 +68,23 @@ export default function CreateScreen() {
     }
   }, [isFocused, route.params?.updatedImage]);
 
+  useEffect(() => {
+  if (!isFocused) return;
+
+  // 🔥 RESET EVERYTHING when opening CreateScreen
+  setTitle('');
+  setDescription('');
+  setPrice('');
+  setTags([]);
+  setTagInput('');
+  setAllowLikes(true);
+  setAllowComments(true);
+
+  const paramsImages = route.params?.images || [];
+  const initial = [...paramsImages];
+  while (initial.length < 4) initial.push(null);
+  setImages(initial);
+}, [isFocused]);
   /* ---------------- ANIMATIONS ---------------- */
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -141,50 +147,42 @@ export default function CreateScreen() {
     title.trim() &&
     description.trim() &&
     images.filter(Boolean).length > 0;
+
 const handlePublish = async () => {
-  if (!canPublish) return;
+  if (!canPublish || loading) return; // ✅ prevent multiple taps
+  setLoading(true); // start loading
 
   try {
     const form = new FormData();
 
-    images
-      .filter(Boolean)
-      .forEach((uri: any, index) => {
-        form.append('images', {
-          uri,
-          name: `image-${index}.jpg`,
-          type: 'image/jpeg',
-        } as any);
-      });
+    images.filter(Boolean).forEach((uri: any, index) => {
+      form.append('images', {
+        uri,
+        name: `image-${index}.jpg`,
+        type: 'image/jpeg',
+      } as any);
+    });
 
     form.append('title', title);
     form.append('description', description);
     if (price) form.append('price', price);
     form.append('allowComments', String(allowComments));
+    form.append('allowLikes', String(allowLikes));
 
-    console.log('Uploading FormData...');
     await createImagePostApi(form, token);
 
     Alert.alert('Success', 'Post created successfully');
     nav.goBack();
-  }catch (err: any) {
-    // Extract the exact backend error message
+  } catch (err: any) {
     let message = 'Failed to upload post';
-
-    if (err.response?.data?.message) {
-      // Most APIs return { message: '...' }
-      message = err.response.data.message;
-    } else if (err.response?.data) {
-      // If API returns some object, stringify it
-      message = JSON.stringify(err.response.data);
-    } else if (err.message) {
-      // Axios/network error
-      message = err.message;
-    }
+    if (err.response?.data?.message) message = err.response.data.message;
+    else if (err.message) message = err.message;
 
     console.log('Upload error:', err);
     Alert.alert('Error', message);
-  };
+  } finally {
+    setLoading(false); // reset loading after finish
+  }
 };
 
 
@@ -292,13 +290,16 @@ const handlePublish = async () => {
             <Switch value={allowLikes} onValueChange={setAllowLikes} />
           </View>
 
-          <TouchableOpacity
-            disabled={!canPublish}
-            style={[styles.publish, !canPublish && { opacity: 0.4 }]}
-            onPress={handlePublish}
-          >
-            <Text style={styles.publishText}>Publish</Text>
-          </TouchableOpacity>
+<TouchableOpacity
+  disabled={!canPublish || loading} // ✅ disable while API is running
+  style={[styles.publish, (!canPublish || loading) && { opacity: 0.4 }]}
+  onPress={handlePublish}
+>
+  <Text style={styles.publishText}>
+    {loading ? 'Publishing...' : 'Publish'}  {/* optional: show loading */}
+  </Text>
+</TouchableOpacity>
+
         </View>
       </Animated.ScrollView>
     </View>

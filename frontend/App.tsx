@@ -38,6 +38,8 @@ import EditImageScreen from './screens/components/EditImageScreen';
 /* ---------- AUTH ---------- */
 import SignInScreen from './screens/auth/SignInScreen';
 import SignUpScreen from './screens/auth/SignUpScreen';
+// IMPORT THE PENDING SCREEN
+import PendingVerificationScreen from './screens/auth/PendingVerificationScreen';
 import { AuthProvider, AuthContext } from 'src/context/AuthContext';
 
 // Keep native splash visible until we are ready
@@ -160,6 +162,8 @@ function AuthStack({}: AuthStackProps) {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="SignIn" component={SignInScreen} />
       <Stack.Screen name="SignUp" component={SignUpScreen} />
+      {/* ADD THE SCREEN HERE */}
+      <Stack.Screen name="PendingVerification" component={PendingVerificationScreen} />
     </Stack.Navigator>
   );
 }

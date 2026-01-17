@@ -65,7 +65,8 @@ export default function Approvals() {
                 <h3 className="font-bold text-lg">{user.companyName}</h3>
                 <p className="text-sm text-gray-600">Owner: {user.name} (@{user.username})</p>
                 <div className="mt-1 flex gap-3 text-xs text-gray-500">
-                   <span>GST: {user.GST || "N/A"}</span>
+                   {/* FIXED: user.GST -> user.gstNumber */}
+                   <span>GST: {user.gstNumber || "N/A"}</span>
                    <span>•</span>
                    <span>Phone: {user.phone}</span>
                 </div>

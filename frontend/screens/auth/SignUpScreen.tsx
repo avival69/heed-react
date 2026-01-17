@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useContext } from 'react'; // Import useContext
 import {
   View,
   Text,
@@ -17,8 +17,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 
+// Import AuthContext
+import { AuthContext } from 'src/context/AuthContext';
+
 const { width } = Dimensions.get('window');
-const API_URL = "http://192.168.29.230:5000/api"; // ⚠️ Replace with your backend URL
+const API_URL = "http://192.168.1.2:5000/api"; 
 
 // --- Options Data ---
 const INTERESTS_LIST = ['Technology', 'Fashion', 'Health', 'Finance', 'Art', 'Travel', 'Food', 'Gaming', 'Music', 'Sports'];
@@ -26,6 +29,9 @@ const ID_TYPES = ['PAN Card', 'Aadhar Card', 'Driving License'];
 const GENDER_OPTS = ['Male', 'Female', 'Other'];
 
 export default function SignUpScreen({ navigation }: any) {
+  // Consume Context
+  const { login } = useContext(AuthContext);
+
   // Animation State
   const [step, setStep] = useState(0);
   const fade = useRef(new Animated.Value(1)).current;
@@ -33,24 +39,24 @@ export default function SignUpScreen({ navigation }: any) {
   // Logic State
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [errors, setErrors] = useState<any>({}); // Inline errors
+  const [errors, setErrors] = useState<any>({}); 
 
   // Form Data
   const [form, setForm] = useState({
     userType: '', 
     username: '', password: '', email: '', phone: '',
-    name: '', bio: '', profilePic: '', bannerImg: '', location: '',
+    name: '', bio: '', location: '',
     age: '', gender: '',
     companyName: '', country: '', address: '', gstNumber: '',
+    productType: '', cashOnDelivery: false,
     idType: '', idDoc: '', 
-    productType: '', 
-    cashOnDelivery: false,
-    interests: [] as string[]
+    interests: [] as string[],
+    profilePic: { local: '', remote: '' }, 
+    bannerImg: { local: '', remote: '' }, 
   });
 
   const update = (k: string, v: any) => {
     setForm(p => ({ ...p, [k]: v }));
-    // Clear error when user types
     if (errors[k]) setErrors((prev: any) => ({ ...prev, [k]: null }));
   };
 
@@ -66,8 +72,7 @@ export default function SignUpScreen({ navigation }: any) {
 
   // --- Actions ---
 
-  // 1. Image Upload (Presigned URL Flow)
-  const handleImagePick = async (field: string) => {
+  const handleSmartImagePick = async (field: 'profilePic' | 'bannerImg') => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -76,31 +81,52 @@ export default function SignUpScreen({ navigation }: any) {
       });
 
       if (result.canceled) return;
+      const asset = result.assets[0];
+
+      setForm(prev => ({
+        ...prev,
+        [field]: { ...prev[field], local: asset.uri }
+      }));
+
       setUploading(true);
 
-      const asset = result.assets[0];
-      const folder = field === 'idDoc' ? 'documents' : 'profiles';
-
-      // A. Get Secure Link
-      const res = await fetch(`${API_URL}/auth/upload-url?folder=${folder}&fileType=image/jpeg`);
+      const res = await fetch(`${API_URL}/auth/upload-url?folder=profiles&fileType=image/jpeg`);
       const { uploadUrl, publicUrl } = await res.json();
 
-      // B. Upload to Cloud
       const imgResp = await fetch(asset.uri);
       const blob = await imgResp.blob();
       await fetch(uploadUrl, { method: "PUT", body: blob });
 
-      // C. Save Public Link
-      update(field, publicUrl);
+      setForm(prev => ({
+        ...prev,
+        [field]: { local: asset.uri, remote: publicUrl }
+      }));
+      
       setUploading(false);
     } catch (err) {
       console.error(err);
       setUploading(false);
-      setErrors((p: any) => ({...p, [field]: "Upload failed. Try again."}));
+      setErrors((p: any) => ({...p, [field]: "Upload failed"}));
     }
   };
 
-  // 2. Location
+  const handleDocPick = async () => {
+    try {
+        const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
+        if (result.canceled) return;
+        
+        const asset = result.assets[0];
+        const res = await fetch(`${API_URL}/auth/upload-url?folder=documents&fileType=image/jpeg`);
+        const { uploadUrl, publicUrl } = await res.json();
+        
+        const imgResp = await fetch(asset.uri);
+        const blob = await imgResp.blob();
+        await fetch(uploadUrl, { method: "PUT", body: blob });
+        
+        update('idDoc', publicUrl);
+    } catch(e) { console.error(e) }
+  };
+
   const handleLocation = async () => {
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -115,7 +141,6 @@ export default function SignUpScreen({ navigation }: any) {
     }
   };
 
-  // 3. Validation
   const validateStep = () => {
     let newErrors: any = {};
     let isValid = true;
@@ -127,7 +152,7 @@ export default function SignUpScreen({ navigation }: any) {
       if (form.phone.length !== 10) newErrors.phone = "Enter valid 10-digit phone";
     }
     if (step === 2) {
-        if(!form.name) newErrors.name = "Full name is required";
+       if(!form.name) newErrors.name = "Full name is required";
     }
     if (step === 3 && form.userType === 'business') {
       if (!form.companyName) newErrors.companyName = "Company name is required";
@@ -150,33 +175,36 @@ export default function SignUpScreen({ navigation }: any) {
   const submit = async () => {
     setLoading(true);
     try {
+      const payload = {
+          ...form,
+          profilePic: form.profilePic.remote || form.profilePic.local, 
+          bannerImg: form.bannerImg.remote || form.bannerImg.local
+      };
+
       const response = await fetch(`${API_URL}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify(payload)
       });
       
       const data = await response.json();
-
       if (!response.ok) throw new Error(data.message);
 
-      // --- Navigation Logic ---
+      /* FIXED NAVIGATION LOGIC HERE */
       if (form.userType === 'business' && !data.user.isVerified) {
-        // Business -> Pending Page
-        navigation.reset({
-            index: 0,
-            routes: [{ name: 'PendingVerification' }], 
-        });
+        // Navigate within the same AuthStack
+        navigation.reset({ index: 0, routes: [{ name: 'PendingVerification' }] });
       } else {
-        // General -> Home/Login
-        // await login(data.token); // If you have auth context
-        navigation.reset({
-            index: 0,
-            routes: [{ name: 'Home' }], 
-        });
+        // Log in directly. AuthContext updates state -> App.tsx re-renders -> MainTabs (Home) is shown.
+        if (data.token && data.user) {
+            await login(data.user, data.token);
+        } else {
+            // Fallback for cases where token might not be returned immediately
+            navigation.navigate('SignIn');
+        }
       }
     } catch (err: any) {
-      setErrors({ form: err.message }); // General form error
+      setErrors({ form: err.message });
     } finally {
       setLoading(false);
     }
@@ -207,18 +235,8 @@ export default function SignUpScreen({ navigation }: any) {
               <Text style={styles.headerSub}>Select your account type</Text>
 
               <View style={styles.typeRow}>
-                <TypeCard 
-                    title="General" 
-                    icon="person" 
-                    selected={form.userType === 'general'} 
-                    onPress={() => update('userType', 'general')} 
-                />
-                <TypeCard 
-                    title="Business" 
-                    icon="briefcase" 
-                    selected={form.userType === 'business'} 
-                    onPress={() => update('userType', 'business')} 
-                />
+                <TypeCard title="General" icon="person" selected={form.userType === 'general'} onPress={() => update('userType', 'general')} />
+                <TypeCard title="Business" icon="briefcase" selected={form.userType === 'business'} onPress={() => update('userType', 'business')} />
               </View>
               {form.userType !== '' && <PrimaryButton label="Continue" onPress={() => animateNext(() => setStep(1))} />}
             </View>
@@ -228,26 +246,46 @@ export default function SignUpScreen({ navigation }: any) {
           {step === 1 && (
             <>
               <Text style={styles.sectionTitle}>Login Details</Text>
-              <Input label="Username" value={form.username} onChange={v => update('username', v)} error={errors.username} />
-              <Input label="Email" value={form.email} onChange={v => update('email', v)} error={errors.email} keyboardType="email-address" />
-              <Input label="Password" value={form.password} onChange={v => update('password', v)} isSecure error={errors.password} />
-              <Input label="Phone" value={form.phone} onChange={v => update('phone', v)} keyboardType="numeric" maxLength={10} error={errors.phone} />
+              <Input label="Username" value={form.username} onChange={(v:any) => update('username', v)} error={errors.username} />
+              <Input label="Email" value={form.email} onChange={(v:any) => update('email', v)} error={errors.email} keyboardType="email-address" />
+              <Input label="Password" value={form.password} onChange={(v:any) => update('password', v)} isSecure error={errors.password} />
+              <Input label="Phone" value={form.phone} onChange={(v:any) => update('phone', v)} keyboardType="numeric" maxLength={10} error={errors.phone} />
               <PrimaryButton label="Next" onPress={nextStep} />
             </>
           )}
 
-          {/* STEP 2: Profile */}
+          {/* STEP 2: Profile (Using Improved Styles) */}
           {step === 2 && (
             <>
                <Text style={styles.sectionTitle}>Profile Setup</Text>
-               <View style={styles.uploadRow}>
-                    <ImageUploader label="Profile Pic" value={form.profilePic} onPress={() => handleImagePick('profilePic')} />
-                    <ImageUploader label="Banner" value={form.bannerImg} onPress={() => handleImagePick('bannerImg')} />
-               </View>
-               {uploading && <ActivityIndicator color="#2563eb" style={{marginBottom: 10}} />}
                
-               <Input label="Full Name" value={form.name} onChange={v => update('name', v)} error={errors.name} />
-               <Input label="Bio" value={form.bio} onChange={v => update('bio', v)} multiline />
+               {/* 2.1 Profile Avatar - Center Circle */}
+               <TouchableOpacity style={styles.avatarBox} onPress={() => handleSmartImagePick('profilePic')}>
+                  {form.profilePic.local ? (
+                     <Image source={{ uri: form.profilePic.local }} style={styles.avatarImg} />
+                  ) : (
+                     <Ionicons name="person" size={44} color="#9ca3af" />
+                  )}
+                  <View style={styles.cameraBadge}>
+                     <Ionicons name="camera" size={14} color="#fff" />
+                  </View>
+                  {uploading && <ActivityIndicator style={styles.loaderCenter} color="#2563eb" />}
+               </TouchableOpacity>
+
+               {/* 2.2 Banner Image */}
+               <TouchableOpacity style={styles.bannerBox} onPress={() => handleSmartImagePick('bannerImg')}>
+                  {form.bannerImg.local ? (
+                     <Image source={{ uri: form.bannerImg.local }} style={styles.bannerImg} />
+                  ) : (
+                     <View style={{alignItems:'center', gap: 5}}>
+                        <Ionicons name="image-outline" size={24} color="#6b7280" />
+                        <Text style={{ color: "#6b7280" }}>Upload Cover Image</Text>
+                     </View>
+                  )}
+               </TouchableOpacity>
+               
+               <Input label="Full Name" value={form.name} onChange={(v:any) => update('name', v)} error={errors.name} />
+               <Input label="Bio" value={form.bio} onChange={(v:any) => update('bio', v)} multiline />
                
                {/* Location */}
                <Text style={styles.label}>Location</Text>
@@ -270,7 +308,7 @@ export default function SignUpScreen({ navigation }: any) {
                
                {form.userType === 'general' ? (
                    <>
-                     <Input label="Age" value={form.age} onChange={v => update('age', v)} keyboardType="numeric" />
+                     <Input label="Age" value={form.age} onChange={(v:any) => update('age', v)} keyboardType="numeric" />
                      <Text style={styles.label}>Gender</Text>
                      <View style={styles.pillRow}>
                         {GENDER_OPTS.map(g => <Pill key={g} label={g} selected={form.gender === g} onPress={() => update('gender', g)} />)}
@@ -278,11 +316,11 @@ export default function SignUpScreen({ navigation }: any) {
                    </>
                ) : (
                    <>
-                     <Input label="Company Name" value={form.companyName} onChange={v => update('companyName', v)} error={errors.companyName} />
-                     <Input label="Full Address" value={form.address} onChange={v => update('address', v)} multiline />
+                     <Input label="Company Name" value={form.companyName} onChange={(v:any) => update('companyName', v)} error={errors.companyName} />
+                     <Input label="Full Address" value={form.address} onChange={(v:any) => update('address', v)} multiline />
                      <View style={{flexDirection:'row', gap: 10}}>
-                         <Input label="Country" value={form.country} onChange={v => update('country', v)} style={{flex:1}} />
-                         <Input label="GST (Optional)" value={form.gstNumber} onChange={v => update('gstNumber', v)} style={{flex:1}} />
+                         <Input label="Country" value={form.country} onChange={(v:any) => update('country', v)} style={{flex:1}} />
+                         <Input label="GST (Optional)" value={form.gstNumber} onChange={(v:any) => update('gstNumber', v)} style={{flex:1}} />
                      </View>
 
                      <Text style={styles.label}>ID Verification (Required)</Text>
@@ -291,7 +329,7 @@ export default function SignUpScreen({ navigation }: any) {
                      </View>
                      {errors.idType && <Text style={styles.errorText}>{errors.idType}</Text>}
 
-                     <ImageUploader label="Upload ID Document" value={form.idDoc} onPress={() => handleImagePick('idDoc')} wide />
+                     <ImageUploader label="Upload ID Document" value={form.idDoc} onPress={handleDocPick} wide />
                      {errors.idDoc && <Text style={styles.errorText}>{errors.idDoc}</Text>}
 
                      <TouchableOpacity style={styles.checkbox} onPress={() => update('cashOnDelivery', !form.cashOnDelivery)}>
@@ -342,7 +380,7 @@ const Input = ({ label, value, onChange, isSecure, keyboardType, multiline, styl
   <View style={[styles.inputWrapper, style]}>
     <Text style={styles.label}>{label}</Text>
     <TextInput
-      style={[styles.input, multiline && {height: 80, paddingTop: 10}, error && styles.errorBorder]}
+      style={[styles.input, multiline && {height: 80, paddingTop: 10, textAlignVertical: 'top'}, error && styles.errorBorder]}
       value={value}
       onChangeText={onChange}
       secureTextEntry={isSecure}
@@ -354,6 +392,7 @@ const Input = ({ label, value, onChange, isSecure, keyboardType, multiline, styl
   </View>
 );
 
+// Used for ID Doc (Simple Box)
 const ImageUploader = ({ label, value, onPress, wide }: any) => (
     <TouchableOpacity style={[styles.imgUpload, wide && {width: '100%'}, value && {borderColor: '#10b981', borderStyle: 'solid'}]} onPress={onPress}>
         {value ? (
@@ -422,8 +461,16 @@ const styles = StyleSheet.create({
   iconCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   typeTitle: { fontSize: 16, fontWeight: '600', color: '#374151' },
 
-  // Images
-  uploadRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  // NEW STYLES FROM CHATGPT (Avatar & Banner)
+  avatarBox: { width: 120, height: 120, borderRadius: 60, backgroundColor: "#f3f4f6", alignSelf: "center", alignItems: "center", justifyContent: "center", marginBottom: 24 },
+  avatarImg: { width: "100%", height: "100%", borderRadius: 60 },
+  cameraBadge: { position: "absolute", bottom: 6, right: 6, backgroundColor: "#2563eb", padding: 6, borderRadius: 20 },
+  loaderCenter: { position: 'absolute' },
+
+  bannerBox: { height: 120, borderRadius: 16, backgroundColor: "#f3f4f6", alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 20, borderWidth: 1, borderColor: '#e5e7eb', borderStyle: 'dashed' },
+  bannerImg: { width: "100%", height: "100%", resizeMode: 'cover' },
+
+  // Old ID Upload Style
   imgUpload: { flex: 1, height: 120, backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', borderStyle: 'dashed', borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   imgPreview: { width: '100%', height: '100%', resizeMode: 'cover' },
   imgText: { fontSize: 12, color: '#6b7280', marginTop: 8 },

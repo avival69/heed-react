@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from 'src/context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
+import { MapPin } from 'lucide-react-native'; // Optional: for location icon
 
 /* --------- DUMMY POSTS --------- */
 const posts = Array.from({ length: 12 }).map((_, i) => ({
@@ -53,6 +54,11 @@ export default function ProfileScreen({ navigation }: any) {
 
   const theme = darkMode ? dark : light;
 
+  // Use optional chaining for safe access
+  const bannerSource = user?.bannerImg 
+    ? { uri: user.bannerImg } 
+    : { uri: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee' };
+
   return (
     <SafeAreaView style={[{ flex: 1 }, theme.bg]} edges={['top']}>
       <ScrollView
@@ -62,10 +68,9 @@ export default function ProfileScreen({ navigation }: any) {
         {/* ---------- HEADER ---------- */}
         <View>
           <Image
-            source={{
-              uri: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee',
-            }}
+            source={bannerSource}
             style={styles.cover}
+            resizeMode="cover"
           />
 
           <TouchableOpacity
@@ -76,15 +81,36 @@ export default function ProfileScreen({ navigation }: any) {
           </TouchableOpacity>
 
           <View style={styles.avatarWrap}>
-            <View style={[styles.avatar, theme.avatar]} />
+            {user?.profilePic ? (
+               <Image 
+                 source={{ uri: user.profilePic }} 
+                 style={[styles.avatar, theme.avatar, { borderWidth: 4, borderColor: theme.bg.backgroundColor }]} 
+               />
+            ) : (
+               <View style={[styles.avatar, theme.avatar, { borderWidth: 4, borderColor: theme.bg.backgroundColor }]} />
+            )}
           </View>
         </View>
 
         {/* ---------- USER INFO ---------- */}
         <View style={styles.info}>
-          <Text style={[styles.username, theme.text]}>
-            {user?.username}
+          <Text style={[styles.name, theme.text]}>
+            {user?.name || user?.username}
           </Text>
+          
+          {/* Handle @username */}
+          <Text style={[styles.username, theme.subText]}>
+            @{user?.username}
+          </Text>
+
+          {/* Location if available */}
+          {user?.location && (
+             <View style={{flexDirection: 'row', alignItems:'center', gap: 4, marginTop: 4}}>
+                <MapPin size={14} color="#6b7280" />
+                <Text style={[styles.location, theme.subText]}>{user.location}</Text>
+             </View>
+          )}
+
           <Text style={[styles.bio, theme.subText]}>
             {user?.bio || 'Building Heed ✨ | Tech • Design • Startups'}
           </Text>
@@ -244,7 +270,7 @@ const dark = {
 /* ---------- STYLES ---------- */
 
 const styles = StyleSheet.create({
-  cover: { width: '100%', height: 160 },
+  cover: { width: '100%', height: 160, backgroundColor: '#e5e7eb' },
   menuBtn: {
     position: 'absolute',
     top: 16,
@@ -259,12 +285,12 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    borderWidth: 4,
-    borderColor: '#fff',
   },
-  info: { alignItems: 'center', marginTop: 8 },
-  username: { fontSize: 18, fontWeight: '700' },
-  bio: { marginTop: 4, textAlign: 'center' },
+  info: { alignItems: 'center', marginTop: 8, paddingHorizontal: 20 },
+  name: { fontSize: 20, fontWeight: '700' },
+  username: { fontSize: 14, fontWeight: '500', marginBottom: 6 },
+  location: { fontSize: 13, marginBottom: 4 },
+  bio: { marginTop: 4, textAlign: 'center', lineHeight: 20 },
   stats: {
     flexDirection: 'row',
     justifyContent: 'space-around',

@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+const R2_BASE_URL = "https://pub-52a7337cc0c34226bcd23333580143ba.r2.dev";
 import {
   View,
   Text,
@@ -8,71 +9,103 @@ import {
   Dimensions,
   Platform,
   StatusBar,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { fetchAllPostsApi } from 'src/api/imagePost';
+import { useIsFocused } from '@react-navigation/native';
+
+
 
 // --- DIMENSIONS & SPACING ---
 const { width } = Dimensions.get('window');
 const COLUMN_GAP = 12;
 const SIDE_PADDING = 12;
-const CARD_WIDTH = (width - (SIDE_PADDING * 2) - COLUMN_GAP) / 2;
+const CARD_WIDTH = (width - SIDE_PADDING * 2 - COLUMN_GAP) / 2;
 
-// --- DUMMY DATA ---
-const generateData = () =>
-  Array.from({ length: 30 }).map((_, i) => ({
-    id: i,
-    // Random height between 180 and 300 for variation
-    height: Math.floor(Math.random() * 120) + 180, 
-    color: `hsl(${Math.random() * 360}, 65%, 85%)`,
-    title: `Post ${i + 1}`,
-  }));
+// --- TYPES ---
+interface ImagePost {
+  _id: string;
+  title: string;
+  description?: string;
+  price?: number;
+  likes: number; // ✅ REQUIRED
+  images: { high: string; low: string }[];
+  user: {
+    username: string;
+  };
+}
+
+const getStableHeight = (id: string) => {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return 220 + (Math.abs(hash) % 120);
+};
 
 export default function HomeScreen({ scrollY }: { scrollY: Animated.Value }) {
   const navigation = useNavigation<any>();
-  const [data] = useState(generateData());
+  const isFocused = useIsFocused();
+  const [posts, setPosts] = useState<ImagePost[]>([]);
 
-  /* ---------- SMART HEADER ANIMATION (diffClamp) ---------- */
-  // 1. diffClamp tracks the "velocity" of the scroll locally
+  /* ---------- FETCH POSTS ---------- */
+useEffect(() => {
+  if (!isFocused) return;
+
+  fetchAllPostsApi()
+    .then(res => setPosts(res.data))
+    .catch(err => console.log(err.response?.data));
+}, [isFocused]);
+
+useEffect(() => {
+}, [posts]);
+  /* ---------- SMART HEADER ANIMATION ---------- */
   const scrollYClamped = Animated.diffClamp(scrollY, 0, 100);
 
-  // 2. Interpolate that local value to translate the header
   const headerTranslate = scrollYClamped.interpolate({
     inputRange: [0, 100],
-    outputRange: [0, -100], // Slide up 100px
+    outputRange: [0, -100],
     extrapolate: 'clamp',
   });
 
   const headerOpacity = scrollYClamped.interpolate({
     inputRange: [0, 60],
-    outputRange: [1, 0], // Fade out quickly
+    outputRange: [1, 0],
     extrapolate: 'clamp',
   });
 
-  /* ---------- MASONRY LAYOUT LOGIC ---------- */
-  // We split items into two columns based on current column height
-  const leftCol: typeof data = [];
-  const rightCol: typeof data = [];
-  
+  /* ---------- MASONRY LAYOUT ---------- */
+  const leftCol: any[] = [];
+  const rightCol: any[] = [];
+
   let leftHeight = 0;
   let rightHeight = 0;
 
-  data.forEach((item) => {
+  posts.forEach(post => {
+  console.log('IMAGE URL:', post.images?.[0]?.low);
+
+
+    const height = getStableHeight(post._id);
+
+
+    const item = { ...post, height };
+
     if (leftHeight <= rightHeight) {
       leftCol.push(item);
-      leftHeight += item.height;
+      leftHeight += height;
     } else {
       rightCol.push(item);
-      rightHeight += item.height;
+      rightHeight += height;
     }
   });
 
   return (
     <View style={styles.root}>
-      {/* STATUS BAR BACKGROUND (For translucent header effect) */}
       <View style={styles.statusBarBg} />
 
-      {/* ---------- HEADER ---------- */}
+      {/* HEADER */}
       <Animated.View
         style={[
           styles.header,
@@ -85,84 +118,132 @@ export default function HomeScreen({ scrollY }: { scrollY: Animated.Value }) {
         <Text style={styles.logo}>Heed</Text>
       </Animated.View>
 
-      {/* ---------- SCROLL FEED ---------- */}
+      {/* FEED */}
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true } // Use Native Driver for smoothness
+          { useNativeDriver: true }
         )}
       >
-        <View style={styles.masonryContainer}>
-          {/* LEFT COLUMN */}
-          <View style={styles.column}>
-            {leftCol.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={0.9}
-                onPress={() => navigation.navigate('Item', { item })}
-                style={[
-                  styles.card,
-                  {
-                    height: item.height,
-                    backgroundColor: item.color,
-                  },
-                ]}
-              >
-                <View style={styles.cardOverlay}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  <Text style={styles.cardSubtitle}>User Name</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+      <View style={styles.masonryContainer}>
+  {/* LEFT COLUMN */}
+  <View style={styles.column}>
+    {leftCol.map(item => {
+const coverImageUrl = (() => {
+  if (!item.images || item.images.length === 0) return undefined;
 
-          {/* RIGHT COLUMN */}
-          <View style={styles.column}>
-            {rightCol.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={0.9}
-                onPress={() => navigation.navigate('Item', { item })}
-                style={[
-                  styles.card,
-                  {
-                    height: item.height,
-                    backgroundColor: item.color,
-                  },
-                ]}
-              >
-                <View style={styles.cardOverlay}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  <Text style={styles.cardSubtitle}>User Name</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+  let url = "";
+
+  if (Array.isArray(item.images[0])) {
+    url = item.images[0][0]?.low || "";
+  } else {
+    url = item.images[0]?.low || "";
+  }
+
+  if (!url) return undefined;
+
+  // ✅ Only use URLs that include Cloudflare (your public R2)
+  if (url.includes("r2.cloudflarestorage.com")) {
+    // Optionally, convert to your pub-52a7337cc0c34226bcd23333580143ba.r2.dev base
+    const filename = url.split("/").pop(); // get just the file name
+    return `${R2_BASE_URL}/${filename}`;
+  }
+
+  // Otherwise ignore (local host or unknown)
+  return undefined;
+})();
+    console.log('coverImageUrl (left):', coverImageUrl);
+
+      return (
+        <TouchableOpacity
+          key={item._id}
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('Item', { post: item })}
+          style={[styles.card, { height: item.height }]}
+        >
+          <Image
+            source={{ uri: coverImageUrl }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={styles.cardOverlay}>
+            <Text style={styles.cardTitle}>{item.title}</Text>
+            <Text style={styles.cardSubtitle}>
+              {item.user?.username ?? 'Unknown'}
+            </Text>
           </View>
-        </View>
+        </TouchableOpacity>
+      );
+    })}
+  </View>
+
+  {/* RIGHT COLUMN */}
+  <View style={styles.column}>
+    {rightCol.map(item => {
+const coverImageUrl = (() => {
+  if (!item.images || item.images.length === 0) return undefined;
+
+  let url = "";
+
+  if (Array.isArray(item.images[0])) {
+    url = item.images[0][0]?.low || "";
+  } else {
+    url = item.images[0]?.low || "";
+  }
+
+  if (!url) return undefined;
+
+  // ✅ Only use URLs that include Cloudflare (your public R2)
+  if (url.includes("r2.cloudflarestorage.com")) {
+    // Optionally, convert to your pub-52a7337cc0c34226bcd23333580143ba.r2.dev base
+    const filename = url.split("/").pop(); // get just the file name
+    return `${R2_BASE_URL}/${filename}`;
+  }
+
+  // Otherwise ignore (local host or unknown)
+  return undefined;
+})();
+    console.log('coverImageUrl (right ):', coverImageUrl);
+
+
+      return (
+        <TouchableOpacity
+          key={item._id}
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('Item', { post: item })}
+          style={[styles.card, { height: item.height }]}
+        >
+          <Image
+            source={{ uri: coverImageUrl }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={styles.cardOverlay}>
+            <Text style={styles.cardTitle}>{item.title}</Text>
+            <Text style={styles.cardSubtitle}>
+              {item.user?.username ?? 'Unknown'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      );
+    })}
+  </View>
+</View>
+
       </Animated.ScrollView>
     </View>
   );
 }
 
-/* ---------- STYLES ---------- */
+/* ---------- STYLES (UNCHANGED) ---------- */
 const HEADER_HEIGHT = 60;
-const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 44;
+const STATUS_BAR_HEIGHT =
+  Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 44;
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  statusBarBg: {
-    height: STATUS_BAR_HEIGHT,
-    backgroundColor: '#fff',
-    zIndex: 20,
-  },
-
-  /* HEADER */
+  root: { flex: 1, backgroundColor: '#fff' },
+  statusBarBg: { height: STATUS_BAR_HEIGHT, backgroundColor: '#fff', zIndex: 20 },
   header: {
     position: 'absolute',
     top: STATUS_BAR_HEIGHT,
@@ -173,63 +254,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
-    // Subtle shadow for depth
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
     elevation: 3,
   },
   logo: {
-    fontFamily: 'DancingScript_700Bold', // Make sure this font is loaded in App.tsx
+    fontFamily: 'DancingScript_700Bold',
     fontSize: 32,
     color: '#000',
   },
-
-  /* SCROLL CONTENT */
   scrollContent: {
-    paddingTop: HEADER_HEIGHT + STATUS_BAR_HEIGHT + 10, // Push content down
-    paddingBottom: 100, // Space for bottom tab bar
+    paddingTop: HEADER_HEIGHT + STATUS_BAR_HEIGHT + 10,
+    paddingBottom: 100,
     paddingHorizontal: SIDE_PADDING,
   },
-
-  /* MASONRY GRID */
-  masonryContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  column: {
-    width: CARD_WIDTH,
-    gap: COLUMN_GAP, // Native Gap (React Native 0.71+)
-  },
-
-  /* CARD STYLE */
+  masonryContainer: { flexDirection: 'row', justifyContent: 'space-between' },
+  column: { width: CARD_WIDTH, gap: COLUMN_GAP },
   card: {
     width: '100%',
     borderRadius: 16,
-    marginBottom: COLUMN_GAP, // Fallback spacing
+    marginBottom: COLUMN_GAP,
     padding: 12,
     justifyContent: 'flex-end',
-    // Card Shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    overflow: 'hidden',
   },
   cardOverlay: {
-    // Optional: Gradient overlay effect could go here
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    padding: 10,
+    borderRadius: 12,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1f2937',
-    marginBottom: 2,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: '#4b5563',
-    fontWeight: '500',
-  },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: '#1f2937' },
+  cardSubtitle: { fontSize: 12, color: '#4b5563', fontWeight: '500' },
 });

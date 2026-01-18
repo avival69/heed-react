@@ -181,10 +181,16 @@ export default function EditImageScreen({ route, navigation }: any) {
     }
   };
 
-  const handleSave = () => {
-    if (onSave) onSave(currentUri);
-    navigation.goBack();
-  };
+const handleSave = () => {
+  const { onSaveCropped } = route.params || {};
+  if (onSaveCropped) {
+    onSaveCropped(currentUri); // send cropped image back
+  }
+  navigation.goBack();
+};
+
+
+
 
   return (
     <View style={styles.container}>

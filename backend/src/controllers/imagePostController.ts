@@ -12,7 +12,7 @@ export const createImagePost = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
-    const { title, description } = req.body
+    const { title, description } = req.body;
     const priceRaw = req.body.price;
     const allowComments =
   req.body.allowComments === undefined

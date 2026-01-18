@@ -56,22 +56,14 @@ export default function CreateScreen() {
 
 
 
-  useEffect(() => {
-    if (isFocused && route.params?.updatedImage) {
-      const { index, uri } = route.params.updatedImage;
-      setImages((prev) => {
-        const copy = [...prev];
-        copy[index] = uri;
-        return copy;
-      });
-      nav.setParams({ updatedImage: null });
-    }
-  }, [isFocused, route.params?.updatedImage]);
 
-  useEffect(() => {
+
+
+
+useEffect(() => {
   if (!isFocused) return;
 
-  // 🔥 RESET EVERYTHING when opening CreateScreen
+  // 🔥 RESET EVERYTHING except images if already edited
   setTitle('');
   setDescription('');
   setPrice('');
@@ -80,11 +72,15 @@ export default function CreateScreen() {
   setAllowLikes(true);
   setAllowComments(true);
 
-  const paramsImages = route.params?.images || [];
-  const initial = [...paramsImages];
-  while (initial.length < 4) initial.push(null);
-  setImages(initial);
+  // Only initialize images if state is empty
+  if (!images || images.every(i => i === null)) {
+    const paramsImages = route.params?.images || [];
+    const initial = [...paramsImages];
+    while (initial.length < 4) initial.push(null);
+    setImages(initial);
+  }
 }, [isFocused]);
+
   /* ---------------- ANIMATIONS ---------------- */
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -128,9 +124,20 @@ export default function CreateScreen() {
     });
   };
 
-  const handleEditImage = (uri: string, index: number) => {
-    nav.navigate('EditImage', { uri, index });
-  };
+const handleEditImage = (uri: string, index: number) => {
+  nav.navigate('EditImage', { 
+    uri, 
+    index, 
+    onSaveCropped: (croppedUri: string) => {
+      setImages(prev => {
+        const copy = [...prev];
+        copy[index] = croppedUri; // save local edited image
+        return copy;
+      });
+    }
+  });
+};
+
 
   const handleRemoveImage = (index: number) => {
     setImages((prev) => {
@@ -155,13 +162,14 @@ const handlePublish = async () => {
   try {
     const form = new FormData();
 
-    images.filter(Boolean).forEach((uri: any, index) => {
-      form.append('images', {
-        uri,
-        name: `image-${index}.jpg`,
-        type: 'image/jpeg',
-      } as any);
-    });
+images.filter(Boolean).forEach((uri: any, index) => {
+  form.append('images', {
+    uri,  // can be file:// from crop/rotate
+    name: `image-${index}.jpg`,
+    type: 'image/jpeg',
+  } as any);
+});
+
 
     form.append('title', title);
     form.append('description', description);

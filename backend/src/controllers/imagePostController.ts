@@ -87,13 +87,19 @@ return res.status(201).json({
   }
 };
 /* =========================
-   GET ALL POSTS
+   GET ALL POSTS (PAGINATED)
 ========================= */
-export const getAllImagePosts = async (_: AuthRequest, res: Response) => {
+export const getAllImagePosts = async (req: Request, res: Response) => {
   try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
     const posts = await ImagePost.find()
       .populate("user", "username userType")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
     /* ✅ compute likes */
     const formatted = posts.map(post => ({
@@ -101,6 +107,9 @@ export const getAllImagePosts = async (_: AuthRequest, res: Response) => {
       likes: post.likedBy.length,
     }));
 
+    // Return array directly to keep frontend parsing simple, 
+    // or return object { data: [], hasMore: boolean }
+    // For now, let's just return the array. Frontend stops when array < limit.
     res.json(formatted);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch posts" });

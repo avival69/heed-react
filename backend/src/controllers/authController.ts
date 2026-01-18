@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { getPresignedUrl } from "../cloudflare.js";
-
+import { uploadFile } from "../utils/cloudflareR2.js";
 /* =======================
    REQUEST BODY TYPES
 ======================= */
@@ -189,6 +189,29 @@ export const signup = async (
   } catch (error: any) {
     console.error("SIGNUP BACKEND ERROR:", error);
     return res.status(500).json({ message: error.message || "Server error" });
+  }
+};
+/* =======================
+   ✅ NEW: DIRECT IMAGE UPLOAD
+   (Replaces Presigned URL for stability)
+======================= */
+export const uploadImage = async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    // Use the existing working utility from your project
+    const result = await uploadFile(req.file);
+
+    // Return the public URL
+    return res.status(200).json({
+      message: "Upload success",
+      url: result.Location, // The public URL from R2
+    });
+  } catch (error: any) {
+    console.error("Upload Image Error:", error);
+    res.status(500).json({ message: "Image upload failed" });
   }
 };
 

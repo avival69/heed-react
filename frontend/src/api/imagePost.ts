@@ -10,26 +10,21 @@ export const createImagePostApi = (data: FormData, token: string) => {
   });
 };
 
+export const fetchAllPostsApi = (page = 1, limit = 10) => {
+  return axios.get(`${API_URL}/images?page=${page}&limit=${limit}`);
+};
+
+// ✅ REMOVED THE DUPLICATE BELOW
 export const fetchMyPostsApi = async (token: string) => {
   try {
     const res = await axios.get(`${API_URL}/images/posts/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     });
-    return res.data; // array of posts
+    return res.data; 
   } catch (err) {
     console.error("Fetch My Posts Error:", err);
     throw err;
   }
-};
-
-export const fetchAllPostsApi = (token?: string) => {
-  return axios.get(`${API_URL}/images`, {
-    headers: token
-      ? { Authorization: `Bearer ${token}` }
-      : undefined,
-  });
 };
 
 export const toggleLikePostApi = (postId: string, token: string) => {
@@ -40,10 +35,6 @@ export const toggleLikePostApi = (postId: string, token: string) => {
   );
 };
 
-// 🔴 BEFORE
-// no getSinglePostApi
-
-// ✅ AFTER
 export const getSinglePostApi = (postId: string, token?: string) => {
   return axios.get(`${API_URL}/images/${postId}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,

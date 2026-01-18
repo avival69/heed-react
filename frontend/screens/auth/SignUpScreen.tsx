@@ -1,4 +1,4 @@
-import React, { useState, useRef, useContext } from 'react'; // Import useContext
+import React, { useState, useRef, useContext } from 'react';
 import {
   View,
   Text,
@@ -17,11 +17,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 
-// Import AuthContext
+// ✅ Custom Imports
 import { AuthContext } from 'src/context/AuthContext';
+import { API_URL, getImageUrl } from 'src/api/config';
 
 const { width } = Dimensions.get('window');
-const API_URL = "http://192.168.1.2:5000/api"; 
 
 // --- Options Data ---
 const INTERESTS_LIST = ['Technology', 'Fashion', 'Health', 'Finance', 'Art', 'Travel', 'Food', 'Gaming', 'Music', 'Sports'];
@@ -29,7 +29,6 @@ const ID_TYPES = ['PAN Card', 'Aadhar Card', 'Driving License'];
 const GENDER_OPTS = ['Male', 'Female', 'Other'];
 
 export default function SignUpScreen({ navigation }: any) {
-  // Consume Context
   const { login } = useContext(AuthContext);
 
   // Animation State
@@ -72,6 +71,7 @@ export default function SignUpScreen({ navigation }: any) {
 
   // --- Actions ---
 
+  // ✅ FIXED: Upload Profile/Banner via Backend (Node.js -> R2)
   const handleSmartImagePick = async (field: 'profilePic' | 'bannerImg') => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -83,6 +83,7 @@ export default function SignUpScreen({ navigation }: any) {
       if (result.canceled) return;
       const asset = result.assets[0];
 
+      // 1. Show Local Preview Immediately
       setForm(prev => ({
         ...prev,
         [field]: { ...prev[field], local: asset.uri }
@@ -90,41 +91,71 @@ export default function SignUpScreen({ navigation }: any) {
 
       setUploading(true);
 
-      const res = await fetch(`${API_URL}/auth/upload-url?folder=profiles&fileType=image/jpeg`);
-      const { uploadUrl, publicUrl } = await res.json();
+      // 2. Prepare FormData
+      const formData = new FormData();
+      formData.append('file', {
+        uri: asset.uri,
+        name: asset.fileName || `upload-${Date.now()}.jpg`,
+        type: 'image/jpeg',
+      } as any);
 
-      const imgResp = await fetch(asset.uri);
-      const blob = await imgResp.blob();
-      await fetch(uploadUrl, { method: "PUT", body: blob });
+      // 3. Send to Backend
+      const response = await fetch(`${API_URL}/auth/upload-image`, {
+        method: "POST",
+        body: formData,
+        headers: {
+          // 'Content-Type': 'multipart/form-data', // Auto-handled by fetch
+        },
+      });
 
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Upload failed");
+      }
+
+      // 4. Save Remote URL
       setForm(prev => ({
         ...prev,
-        [field]: { local: asset.uri, remote: publicUrl }
+        [field]: { local: asset.uri, remote: data.url }
       }));
       
       setUploading(false);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("Image Upload Error:", err);
       setUploading(false);
       setErrors((p: any) => ({...p, [field]: "Upload failed"}));
     }
   };
 
+  // ✅ FIXED: Upload Documents via Backend
   const handleDocPick = async () => {
     try {
         const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
         if (result.canceled) return;
         
         const asset = result.assets[0];
-        const res = await fetch(`${API_URL}/auth/upload-url?folder=documents&fileType=image/jpeg`);
-        const { uploadUrl, publicUrl } = await res.json();
+
+        // Prepare FormData
+        const formData = new FormData();
+        formData.append('file', {
+          uri: asset.uri,
+          name: asset.fileName || `doc-${Date.now()}.jpg`,
+          type: 'image/jpeg',
+        } as any);
+
+        // Send to Backend
+        const response = await fetch(`${API_URL}/auth/upload-image`, {
+           method: "POST",
+           body: formData
+        });
         
-        const imgResp = await fetch(asset.uri);
-        const blob = await imgResp.blob();
-        await fetch(uploadUrl, { method: "PUT", body: blob });
+        const data = await response.json();
+        if (!response.ok) throw new Error("Doc upload failed");
         
-        update('idDoc', publicUrl);
-    } catch(e) { console.error(e) }
+        // Save URL directly
+        update('idDoc', data.url);
+    } catch(e) { console.error("Doc Upload Error:", e) }
   };
 
   const handleLocation = async () => {
@@ -177,6 +208,7 @@ export default function SignUpScreen({ navigation }: any) {
     try {
       const payload = {
           ...form,
+          // Use remote URL if upload succeeded, else fallback to local (won't work for other users but prevents crash)
           profilePic: form.profilePic.remote || form.profilePic.local, 
           bannerImg: form.bannerImg.remote || form.bannerImg.local
       };
@@ -190,16 +222,12 @@ export default function SignUpScreen({ navigation }: any) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message);
 
-      /* FIXED NAVIGATION LOGIC HERE */
       if (form.userType === 'business' && !data.user.isVerified) {
-        // Navigate within the same AuthStack
         navigation.reset({ index: 0, routes: [{ name: 'PendingVerification' }] });
       } else {
-        // Log in directly. AuthContext updates state -> App.tsx re-renders -> MainTabs (Home) is shown.
         if (data.token && data.user) {
             await login(data.user, data.token);
         } else {
-            // Fallback for cases where token might not be returned immediately
             navigation.navigate('SignIn');
         }
       }
@@ -209,6 +237,17 @@ export default function SignUpScreen({ navigation }: any) {
       setLoading(false);
     }
   };
+
+  // --- Helper to Resolve URI ---
+  // Prioritize local preview during edits, fallback to remote
+  const getDisplayUri = (imgObj: { local: string, remote: string }) => {
+    if (imgObj.local) return imgObj.local;
+    if (imgObj.remote) return getImageUrl(imgObj.remote);
+    return null;
+  };
+
+  const profileUri = getDisplayUri(form.profilePic);
+  const bannerUri = getDisplayUri(form.bannerImg);
 
   // --- Render ---
   return (
@@ -254,15 +293,15 @@ export default function SignUpScreen({ navigation }: any) {
             </>
           )}
 
-          {/* STEP 2: Profile (Using Improved Styles) */}
+          {/* STEP 2: Profile */}
           {step === 2 && (
             <>
                <Text style={styles.sectionTitle}>Profile Setup</Text>
                
-               {/* 2.1 Profile Avatar - Center Circle */}
+               {/* 2.1 Profile Avatar */}
                <TouchableOpacity style={styles.avatarBox} onPress={() => handleSmartImagePick('profilePic')}>
-                  {form.profilePic.local ? (
-                     <Image source={{ uri: form.profilePic.local }} style={styles.avatarImg} />
+                  {profileUri ? (
+                     <Image source={{ uri: profileUri }} style={styles.avatarImg} />
                   ) : (
                      <Ionicons name="person" size={44} color="#9ca3af" />
                   )}
@@ -274,8 +313,8 @@ export default function SignUpScreen({ navigation }: any) {
 
                {/* 2.2 Banner Image */}
                <TouchableOpacity style={styles.bannerBox} onPress={() => handleSmartImagePick('bannerImg')}>
-                  {form.bannerImg.local ? (
-                     <Image source={{ uri: form.bannerImg.local }} style={styles.bannerImg} />
+                  {bannerUri ? (
+                     <Image source={{ uri: bannerUri }} style={styles.bannerImg} />
                   ) : (
                      <View style={{alignItems:'center', gap: 5}}>
                         <Ionicons name="image-outline" size={24} color="#6b7280" />
@@ -392,7 +431,6 @@ const Input = ({ label, value, onChange, isSecure, keyboardType, multiline, styl
   </View>
 );
 
-// Used for ID Doc (Simple Box)
 const ImageUploader = ({ label, value, onPress, wide }: any) => (
     <TouchableOpacity style={[styles.imgUpload, wide && {width: '100%'}, value && {borderColor: '#10b981', borderStyle: 'solid'}]} onPress={onPress}>
         {value ? (
@@ -461,7 +499,6 @@ const styles = StyleSheet.create({
   iconCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   typeTitle: { fontSize: 16, fontWeight: '600', color: '#374151' },
 
-  // NEW STYLES FROM CHATGPT (Avatar & Banner)
   avatarBox: { width: 120, height: 120, borderRadius: 60, backgroundColor: "#f3f4f6", alignSelf: "center", alignItems: "center", justifyContent: "center", marginBottom: 24 },
   avatarImg: { width: "100%", height: "100%", borderRadius: 60 },
   cameraBadge: { position: "absolute", bottom: 6, right: 6, backgroundColor: "#2563eb", padding: 6, borderRadius: 20 },
@@ -470,17 +507,14 @@ const styles = StyleSheet.create({
   bannerBox: { height: 120, borderRadius: 16, backgroundColor: "#f3f4f6", alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 20, borderWidth: 1, borderColor: '#e5e7eb', borderStyle: 'dashed' },
   bannerImg: { width: "100%", height: "100%", resizeMode: 'cover' },
 
-  // Old ID Upload Style
   imgUpload: { flex: 1, height: 120, backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', borderStyle: 'dashed', borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   imgPreview: { width: '100%', height: '100%', resizeMode: 'cover' },
   imgText: { fontSize: 12, color: '#6b7280', marginTop: 8 },
   checkBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: '#10b981', padding: 4, borderRadius: 10 },
 
-  // Location
   locationBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, backgroundColor: '#f3f4f6', borderRadius: 12, gap: 8 },
   locationText: { color: '#4b5563', fontWeight: '600' },
 
-  // Components
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   pill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f3f4f6' },
   pillActive: { backgroundColor: '#2563eb' },
@@ -489,13 +523,11 @@ const styles = StyleSheet.create({
   checkbox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20, padding: 4 },
   checkboxText: { color: '#1f2937', fontWeight: '500' },
 
-  // Grid
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
   gridItem: { width: '48%', padding: 16, borderRadius: 12, backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
   gridItemActive: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
   gridText: { color: '#4b5563', fontWeight: '600' },
 
-  // Main Button
   btn: { width: '100%', backgroundColor: '#2563eb', padding: 16, borderRadius: 14, alignItems: 'center', shadowColor: '#2563eb', shadowOpacity: 0.3, shadowOffset: {width: 0, height: 4} },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '700' }
 });

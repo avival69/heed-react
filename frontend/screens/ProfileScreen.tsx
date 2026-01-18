@@ -1,6 +1,4 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
-import {  fetchMyPostsApi  } from 'src/api/imagePost';
-
 import {
   View,
   Text,
@@ -14,59 +12,31 @@ import {
   Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AuthContext } from 'src/context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
-import { MapPin } from 'lucide-react-native'; // Optional: for location icon
+import { MapPin } from 'lucide-react-native';
 
-/* --------- DUMMY POSTS --------- */
-
+// ✅ FIXED IMPORTS (Using relative paths)
+import { AuthContext } from '../src/context/AuthContext'; 
+import { fetchMyPostsApi } from '../src/api/imagePost';
+import { getImageUrl } from '../src/api/config'; 
 
 export default function ProfileScreen({ navigation }: any) {
-  const getCloudflareImageUrl = (imgObj: { low?: string; high?: string }) => {
-  if (!imgObj) return undefined;
+  const { user, token, logout } = useContext(AuthContext);
 
-  // Use low first, fallback to high
-  let url = imgObj.low || imgObj.high;
-  if (!url) return undefined;
-
-  // If URL already points to your public R2, just return it
-  if (url.includes('pub-52a7337cc0c34226bcd23333580143ba.r2.dev')) return url;
-
-  // If URL includes Cloudflare's storage URL, convert to your public R2 URL
-  if (url.includes('r2.cloudflarestorage.com')) {
-    const filename = url.split('/').pop(); // get just the file name
-    return `https://pub-52a7337cc0c34226bcd23333580143ba.r2.dev/${filename}`;
-  }
-
-  // Otherwise return original URL
-  return url;
-};
-
-
-const { user, token, logout } = useContext(AuthContext);
-    console.log('User:', user);
-console.log('Token:', token);
-
-
+  // --- State ---
   const [activeTab, setActiveTab] = useState('Posts');
-    const [myPosts, setMyPosts] = useState<any[]>([]);
-const [loadingPosts, setLoadingPosts] = useState<boolean>(false);
+  const [myPosts, setMyPosts] = useState<any[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState<boolean>(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
+  // --- Animation ---
   const slideAnim = useRef(new Animated.Value(260)).current;
 
+  // --- Theme ---
+  const theme = darkMode ? dark : light;
 
-
-  /* ---------- AUTO REDIRECT IF LOGGED OUT ---------- */
-  useFocusEffect(
-    React.useCallback(() => {
-      if (!user) {
-        navigation.replace('SignIn');
-      }
-    }, [user])
-  );
-
+  // --- Side Menu Animation ---
   useEffect(() => {
     Animated.timing(slideAnim, {
       toValue: menuOpen ? 0 : 260,
@@ -75,46 +45,46 @@ const [loadingPosts, setLoadingPosts] = useState<boolean>(false);
     }).start();
   }, [menuOpen]);
 
-
-useFocusEffect(
-  React.useCallback(() => {
-    if (!user || !token) return; // Make sure both exist
-
-    const fetchMyPosts = async () => {
-      try {
-        setLoadingPosts(true);
-        console.log('⏳ Fetching posts for user:', user.username, user._id);
-
-        const posts = await fetchMyPostsApi(token); // use token here
-
-
-        const flattened = posts.flat(1);
-        console.log('Flattened posts:', flattened);
-
-        setMyPosts(flattened);
-            if (flattened.length > 0) {
-      console.log('First post images:', JSON.stringify(flattened[0]?.images, null, 2));
-    }
-      } catch (err) {
-        console.log('❌ Failed to fetch my posts', err);
-      } finally {
-        setLoadingPosts(false);
-        console.log('✅ Finished fetching posts');
+  // --- Auth Check ---
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!user) {
+        navigation.replace('SignIn');
       }
-    };
+    }, [user])
+  );
 
-    fetchMyPosts();
-  }, [user, token])
-);
+  // --- Fetch Posts ---
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!user || !token) return;
 
+      const fetchMyPosts = async () => {
+        try {
+          setLoadingPosts(true);
+          const posts = await fetchMyPostsApi(token);
+          // Ensure we have a flat array (handles potential API response variations)
+          const flattened = Array.isArray(posts) ? posts.flat() : [];
+          setMyPosts(flattened);
+        } catch (err) {
+          console.log('❌ Failed to fetch my posts', err);
+        } finally {
+          setLoadingPosts(false);
+        }
+      };
 
+      fetchMyPosts();
+    }, [user, token])
+  );
 
-  const theme = darkMode ? dark : light;
+  // --- Image Helpers ---
+  const bannerUri = user?.bannerImg 
+    ? getImageUrl(user.bannerImg) 
+    : 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee';
 
-  // Use optional chaining for safe access
-  const bannerSource = user?.bannerImg 
-    ? { uri: user.bannerImg } 
-    : { uri: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee' };
+  const avatarUri = user?.profilePic
+    ? getImageUrl(user.profilePic)
+    : 'https://via.placeholder.com/150'; // Fallback if no pic
 
   return (
     <SafeAreaView style={[{ flex: 1 }, theme.bg]} edges={['top']}>
@@ -124,8 +94,9 @@ useFocusEffect(
       >
         {/* ---------- HEADER ---------- */}
         <View>
+          {/* Banner */}
           <Image
-            source={bannerSource}
+            source={{ uri: bannerUri || undefined }}
             style={styles.cover}
             resizeMode="cover"
           />
@@ -137,15 +108,16 @@ useFocusEffect(
             <Text style={styles.menuIcon}>☰</Text>
           </TouchableOpacity>
 
+          {/* Avatar */}
           <View style={styles.avatarWrap}>
-            {user?.profilePic ? (
-               <Image 
-                 source={{ uri: user.profilePic }} 
-                 style={[styles.avatar, theme.avatar, { borderWidth: 4, borderColor: theme.bg.backgroundColor }]} 
-               />
-            ) : (
-               <View style={[styles.avatar, theme.avatar, { borderWidth: 4, borderColor: theme.bg.backgroundColor }]} />
-            )}
+            <Image 
+              source={{ uri: avatarUri || undefined }} 
+              style={[
+                styles.avatar, 
+                theme.avatar, 
+                { borderWidth: 4, borderColor: theme.bg.backgroundColor }
+              ]} 
+            />
           </View>
         </View>
 
@@ -155,12 +127,10 @@ useFocusEffect(
             {user?.name || user?.username}
           </Text>
           
-          {/* Handle @username */}
           <Text style={[styles.username, theme.subText]}>
             @{user?.username}
           </Text>
 
-          {/* Location if available */}
           {user?.location && (
              <View style={{flexDirection: 'row', alignItems:'center', gap: 4, marginTop: 4}}>
                 <MapPin size={14} color="#6b7280" />
@@ -175,7 +145,7 @@ useFocusEffect(
 
         {/* ---------- STATS ---------- */}
         <View style={styles.stats}>
-          <Stat label="Posts" value="35" theme={theme} />
+          <Stat label="Posts" value={myPosts.length.toString()} theme={theme} />
           <Stat label="Followers" value="1500" theme={theme} />
           <Stat label="Following" value="250" theme={theme} />
         </View>
@@ -188,7 +158,7 @@ useFocusEffect(
 
         {/* ---------- TABS ---------- */}
         <View style={[styles.tabs, theme.border]}>
-          {['Posts', 'Tuck-in', 'Saved', 'Group1'].map((tab) => (
+          {['Posts', 'Tuck-in', 'Saved', 'Groups'].map((tab) => (
             <TouchableOpacity
               key={tab}
               onPress={() => setActiveTab(tab)}
@@ -208,66 +178,62 @@ useFocusEffect(
           ))}
         </View>
 
-        {/* ---------- MASONRY ---------- */}
-{/* ---------- MASONRY ---------- */}
-{/* ---------- MASONRY GRID ---------- */}
-{activeTab === 'Posts' && (
-  <View style={{ flexDirection: 'row', padding: 12, gap: 12 }}>
-    {/* LEFT COLUMN */}
-    <View style={{ flex: 1, gap: 12 }}>
-      {myPosts
-        .filter((_, i) => i % 2 === 0) // even index → left column
-        .map((post) => (
-          <TouchableOpacity
-            key={post._id}
-            onPress={() =>
-              navigation.navigate('Item', {post
-              })
-            }
-            style={{ marginBottom: 12, alignItems: 'center' }}
-          >
-            <Image
-              source={{ uri: getCloudflareImageUrl(post.images?.[0]) }}
-              style={{ width: '100%', borderRadius: 12, aspectRatio: 1 }}
-            />
-            <Text style={{ marginTop: 4, fontWeight: '600' }}>
-              {post.title || post._id}
-            </Text>
-          </TouchableOpacity>
-        ))}
-    </View>
+        {/* ---------- MASONRY GRID (POSTS) ---------- */}
+        {activeTab === 'Posts' && (
+          <View style={styles.masonry}>
+            {/* LEFT COLUMN */}
+            <View style={{ flex: 1, gap: 12 }}>
+              {myPosts
+                .filter((_, i) => i % 2 === 0)
+                .map((post) => {
+                  const imgUrl = getImageUrl(post.images?.[0]?.low || post.images?.[0]?.high);
+                  return (
+                    <TouchableOpacity
+                      key={post._id}
+                      onPress={() => navigation.navigate('Item', { post })}
+                      style={styles.postCard}
+                    >
+                      <Image
+                        source={{ uri: imgUrl || undefined }}
+                        style={styles.postImage}
+                      />
+                      <Text style={[styles.postTitle, theme.text]} numberOfLines={1}>
+                        {post.title || 'Untitled'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+            </View>
 
-    {/* RIGHT COLUMN */}
-    <View style={{ flex: 1, gap: 12 }}>
-      {myPosts
-        .filter((_, i) => i % 2 !== 0) // odd index → right column
-        .map((post) => (
-          <TouchableOpacity
-            key={post._id}
-onPress={() => navigation.navigate('Item', { post})}
-            style={{ marginBottom: 12, alignItems: 'center' }}
-          >
-            <Image
-              source={{ uri: getCloudflareImageUrl(post.images?.[0]) }}
-              style={{ width: '100%', borderRadius: 12, aspectRatio: 1 }}
-            />
-            <Text style={{ marginTop: 4, fontWeight: '600' }}>
-              {post.title || post._id}
-            </Text>
-          </TouchableOpacity>
-        ))}
-    </View>
-  </View>
-)}
-
-
-
-
-
+            {/* RIGHT COLUMN */}
+            <View style={{ flex: 1, gap: 12 }}>
+              {myPosts
+                .filter((_, i) => i % 2 !== 0)
+                .map((post) => {
+                  const imgUrl = getImageUrl(post.images?.[0]?.low || post.images?.[0]?.high);
+                  return (
+                    <TouchableOpacity
+                      key={post._id}
+                      onPress={() => navigation.navigate('Item', { post })}
+                      style={styles.postCard}
+                    >
+                      <Image
+                        source={{ uri: imgUrl || undefined }}
+                        style={styles.postImage}
+                      />
+                      <Text style={[styles.postTitle, theme.text]} numberOfLines={1}>
+                        {post.title || 'Untitled'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+            </View>
+          </View>
+        )}
       </ScrollView>
 
-      {/* ---------- SIDEBAR ---------- */}
-      <Modal transparent visible={menuOpen}>
+      {/* ---------- SIDEBAR SETTINGS ---------- */}
+      <Modal transparent visible={menuOpen} animationType="none">
         <Pressable style={styles.overlay} onPress={() => setMenuOpen(false)} />
 
         <Animated.View
@@ -279,8 +245,8 @@ onPress={() => navigation.navigate('Item', { post})}
         >
           <Text style={[styles.sidebarTitle, theme.text]}>Settings</Text>
 
-          <SidebarItem label="Accounts" />
-          <SidebarItem label="Terms & Conditions" />
+          <SidebarItem label="Accounts" theme={theme} />
+          <SidebarItem label="Terms & Conditions" theme={theme} />
 
           <View style={styles.darkRow}>
             <Text style={[styles.sidebarText, theme.text]}>Dark Mode</Text>
@@ -289,14 +255,15 @@ onPress={() => navigation.navigate('Item', { post})}
 
           <View style={styles.divider} />
 
-          {/* ---------- LOGOUT ---------- */}
+          {/* Log out */}
           <SidebarItem
             label="Log out"
             danger
             onPress={async () => {
               setMenuOpen(false);
-              await logout(); // 🔥 this alone is enough
+              await logout();
             }}
+            theme={theme}
           />
         </Animated.View>
       </Modal>
@@ -304,7 +271,7 @@ onPress={() => navigation.navigate('Item', { post})}
   );
 }
 
-/* ---------- SMALL COMPONENTS ---------- */
+/* ---------- COMPONENTS ---------- */
 
 function Stat({ label, value, theme }: any) {
   return (
@@ -323,10 +290,16 @@ function ActionButton({ title }: any) {
   );
 }
 
-function SidebarItem({ label, danger, onPress }: any) {
+function SidebarItem({ label, danger, onPress, theme }: any) {
   return (
     <TouchableOpacity style={styles.sidebarItem} onPress={onPress}>
-      <Text style={[styles.sidebarText, danger && { color: '#dc2626' }]}>
+      <Text 
+        style={[
+          styles.sidebarText, 
+          theme?.text, 
+          danger && { color: '#dc2626' }
+        ]}
+      >
         {label}
       </Text>
     </TouchableOpacity>
@@ -414,8 +387,17 @@ const styles = StyleSheet.create({
     marginTop: 6,
     borderRadius: 2,
   },
-  masonry: { flexDirection: 'row', paddingHorizontal: 12, marginTop: 16 },
-  card: { borderRadius: 16, marginBottom: 12 },
+  masonry: { flexDirection: 'row', padding: 12, gap: 12 },
+  postCard: { marginBottom: 12, alignItems: 'center', width: '100%' },
+  postImage: {
+    width: '100%',
+    borderRadius: 12,
+    aspectRatio: 1,
+    backgroundColor: '#f3f4f6',
+    resizeMode: 'cover',
+  },
+  postTitle: { marginTop: 4, fontWeight: '600', fontSize: 12 },
+  
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
   sidebar: {
     position: 'absolute',
@@ -427,6 +409,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderTopLeftRadius: 24,
     borderBottomLeftRadius: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: -2, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 5,
   },
   sidebarTitle: {
     fontSize: 18,
@@ -446,10 +433,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
   },
-  postImage: {
-  width: '100%',
-  height: 220,
-  borderRadius: 16,
-  resizeMode: 'cover',
-},
 });

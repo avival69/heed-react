@@ -175,7 +175,7 @@ useFocusEffect(
 
         {/* ---------- STATS ---------- */}
         <View style={styles.stats}>
-          <Stat label="Posts" value="35" theme={theme} />
+          <Stat label="Posts" value={myPosts.length} theme={theme} />
           <Stat label="Followers" value="1500" theme={theme} />
           <Stat label="Following" value="250" theme={theme} />
         </View>

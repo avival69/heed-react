@@ -59,11 +59,10 @@ export default function CreateScreen() {
 
 
 
-
 useEffect(() => {
   if (!isFocused) return;
 
-  // 🔥 RESET EVERYTHING except images if already edited
+  // 🔥 RESET EVERYTHING
   setTitle('');
   setDescription('');
   setPrice('');
@@ -72,14 +71,12 @@ useEffect(() => {
   setAllowLikes(true);
   setAllowComments(true);
 
-  // Only initialize images if state is empty
-  if (!images || images.every(i => i === null)) {
-    const paramsImages = route.params?.images || [];
-    const initial = [...paramsImages];
-    while (initial.length < 4) initial.push(null);
-    setImages(initial);
-  }
-}, [isFocused]);
+  // Always initialize images from route params (if any)
+  const paramsImages = route.params?.images || [];
+  const initial = [...paramsImages];
+  while (initial.length < 4) initial.push(null);
+  setImages(initial);
+}, [isFocused, route.params?.images]);
 
   /* ---------------- ANIMATIONS ---------------- */
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -156,20 +153,19 @@ const handleEditImage = (uri: string, index: number) => {
     images.filter(Boolean).length > 0;
 
 const handlePublish = async () => {
-  if (!canPublish || loading) return; // ✅ prevent multiple taps
+  if (!canPublish || loading) return; // prevent multiple taps
   setLoading(true); // start loading
 
   try {
     const form = new FormData();
 
-images.filter(Boolean).forEach((uri: any, index) => {
-  form.append('images', {
-    uri,  // can be file:// from crop/rotate
-    name: `image-${index}.jpg`,
-    type: 'image/jpeg',
-  } as any);
-});
-
+    images.filter(Boolean).forEach((uri: any, index) => {
+      form.append('images', {
+        uri,  // can be file:// from crop/rotate
+        name: `image-${index}.jpg`,
+        type: 'image/jpeg',
+      } as any);
+    });
 
     form.append('title', title);
     form.append('description', description);
@@ -180,6 +176,18 @@ images.filter(Boolean).forEach((uri: any, index) => {
     await createImagePostApi(form, token);
 
     Alert.alert('Success', 'Post created successfully');
+
+    // 🔥 RESET EVERYTHING including images
+    setImages([null, null, null, null]);
+    setTitle('');
+    setDescription('');
+    setPrice('');
+    setTags([]);
+    setTagInput('');
+    setAllowLikes(true);
+    setAllowComments(true);
+
+    route.params?.refreshPosts?.(); // call refresh function if passed
     nav.goBack();
   } catch (err: any) {
     let message = 'Failed to upload post';
@@ -189,9 +197,10 @@ images.filter(Boolean).forEach((uri: any, index) => {
     console.log('Upload error:', err);
     Alert.alert('Error', message);
   } finally {
-    setLoading(false); // reset loading after finish
+    setLoading(false);
   }
 };
+
 
 
   /* ---------------- RENDER ---------------- */
